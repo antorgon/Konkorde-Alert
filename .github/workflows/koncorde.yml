@@ -1,0 +1,41 @@
+name: Koncorde Alert
+
+on:
+  schedule:
+    # Se ejecuta a los 5 minutos de cada hora (deja margen a que Binance
+    # cierre la vela horaria antes de comprobarla). Ajusta el cron si usas
+    # otro INTERVAL en koncorde_alert.py (ej. "*/15 * * * *" para 15m).
+    - cron: "5 * * * *"
+  workflow_dispatch: {}  # permite lanzarlo manualmente desde la pestaña Actions
+
+permissions:
+  contents: write  # necesario para poder commitear state.json
+
+jobs:
+  check-koncorde:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Koncorde check
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python koncorde_alert.py
+
+      - name: Commit updated state (anti-duplicados)
+        run: |
+          git config user.name "koncorde-bot"
+          git config user.email "actions@github.com"
+          git add state.json
+          git diff --staged --quiet || git commit -m "Update alert state [skip ci]"
+          git push
