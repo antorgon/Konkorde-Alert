@@ -2,12 +2,10 @@ name: Koncorde Alert
 
 on:
   schedule:
-    # Cada 30 minutos, pero en los minutos 7 y 37 en vez de 0 y 30.
-    # GitHub retrasa o incluso salta ejecuciones programadas en momentos de
-    # mucha carga, y :00/:30 son los minutos mas usados por todo GitHub para
-    # sus crons -> mayor probabilidad de que se pierda la ejecucion. Un
-    # minuto "impar" evita gran parte de esa congestion.
-    - cron: "7,37 * * * *"
+    # Cada 15 minutos (temporalmente, para diagnosticar por que no salta el
+    # cron automatico). Minutos 7/22/37/52 para evitar la congestion de
+    # :00/:15/:30/:45.
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch: {}  # permite lanzarlo manualmente desde la pestaña Actions
 
 permissions:
@@ -18,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
