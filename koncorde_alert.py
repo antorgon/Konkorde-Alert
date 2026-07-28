@@ -35,6 +35,9 @@ STATE_FILE = "state.json"
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+# data-api.binance.vision es el dominio de Binance dedicado a datos publicos
+# de mercado; a diferencia de api.binance.com, no bloquea peticiones desde
+# IPs de EEUU (como las que usa GitHub Actions), asi que evita el error 451.
 BINANCE_KLINES_URL = "https://data-api.binance.vision/api/v3/klines"
 
 
@@ -122,10 +125,19 @@ def compute_koncorde(df: pd.DataFrame, m: int = 15) -> pd.DataFrame:
 
 
 def cruce_alcista(df: pd.DataFrame) -> bool:
+    """Verde entra en la montaña: cruza por encima de media."""
     if len(df) < 3:
         return False
     prev, last = df.iloc[-3], df.iloc[-2]
     return prev["verde"] <= prev["media"] and last["verde"] > last["media"]
+
+
+def cruce_bajista(df: pd.DataFrame) -> bool:
+    """Verde sale de la montaña: cruza por debajo de media."""
+    if len(df) < 3:
+        return False
+    prev, last = df.iloc[-3], df.iloc[-2]
+    return prev["verde"] >= prev["media"] and last["verde"] < last["media"]
 
 
 # --------------------------- ESTADO (anti-duplicados) ---------------------------
@@ -158,18 +170,36 @@ def main():
     close_time_str = last_closed["close_time"].isoformat()
 
     state = load_state()
-    already_alerted = state.get("last_alert_close_time") == close_time_str
+    ya_avisado_alza = state.get("last_alert_up_close_time") == close_time_str
+    ya_avisado_baja = state.get("last_alert_down_close_time") == close_time_str
 
-    if cruce_alcista(df) and not already_alerted:
+    señal_enviada = False
+
+    if cruce_alcista(df) and not ya_avisado_alza:
         msg = (
             f"Koncorde {SYMBOL} {INTERVAL}\n"
-            f"Verde cruza al alza la media\n"
+            f"Verde entra en la montaña (cruce al alza sobre media)\n"
             f"Vela cerrada: {close_time_str}\n"
             f"Precio cierre: {last_closed['close']:.2f}"
         )
         print(msg)
         send_telegram(msg)
-        state["last_alert_close_time"] = close_time_str
+        state["last_alert_up_close_time"] = close_time_str
+        señal_enviada = True
+
+    if cruce_bajista(df) and not ya_avisado_baja:
+        msg = (
+            f"Koncorde {SYMBOL} {INTERVAL}\n"
+            f"Verde sale de la montaña (cruce a la baja bajo media)\n"
+            f"Vela cerrada: {close_time_str}\n"
+            f"Precio cierre: {last_closed['close']:.2f}"
+        )
+        print(msg)
+        send_telegram(msg)
+        state["last_alert_down_close_time"] = close_time_str
+        señal_enviada = True
+
+    if señal_enviada:
         save_state(state)
     else:
         print(f"Sin señal nueva. Ultima vela cerrada: {close_time_str}")
