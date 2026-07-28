@@ -5,7 +5,7 @@ on:
     # Cada 15 minutos (temporalmente, para diagnosticar por que no salta el
     # cron automatico). Minutos 7/22/37/52 para evitar la congestion de
     # :00/:15/:30/:45.
-    - cron: "7,22,37,52 * * * *"
+    - cron: "* * * * *"
   workflow_dispatch: {}  # permite lanzarlo manualmente desde la pestaña Actions
 
 permissions:
