@@ -84,14 +84,20 @@ def _stoch(series, high, low, length=21, smooth=3):
 
 
 def _pvi_nvi(df: pd.DataFrame):
+    """Positive/Negative Volume Index, vectorizado con cumprod (equivalente
+    al bucle vela-a-vela, pero sin iterar en Python)."""
     ret = df["close"].pct_change().fillna(0)
-    up = df["volume"] > df["volume"].shift(1)
-    down = df["volume"] < df["volume"].shift(1)
-    pvi, nvi = [1000.0], [1000.0]
-    for i in range(1, len(df)):
-        pvi.append(pvi[-1] * (1 + ret.iloc[i]) if up.iloc[i] else pvi[-1])
-        nvi.append(nvi[-1] * (1 + ret.iloc[i]) if down.iloc[i] else nvi[-1])
-    df["pvi"], df["nvi"] = pvi, nvi
+    vol_change = df["volume"].diff()
+    up = vol_change > 0
+    down = vol_change < 0
+
+    pvi_factor = (1 + ret).where(up, 1.0)
+    nvi_factor = (1 + ret).where(down, 1.0)
+    pvi_factor.iloc[0] = 1.0
+    nvi_factor.iloc[0] = 1.0
+
+    df["pvi"] = 1000.0 * pvi_factor.cumprod()
+    df["nvi"] = 1000.0 * nvi_factor.cumprod()
     return df
 
 
@@ -124,20 +130,17 @@ def compute_koncorde(df: pd.DataFrame, m: int = 15) -> pd.DataFrame:
     return df
 
 
-def cruce_alcista(df: pd.DataFrame) -> bool:
-    """Verde entra en la montaña: cruza por encima de media."""
+def detectar_cruce(df: pd.DataFrame) -> str | None:
+    """Devuelve 'alza' (entra en la montaña), 'baja' (sale de la montaña)
+    o None si no hay cruce en la ultima vela cerrada."""
     if len(df) < 3:
-        return False
+        return None
     prev, last = df.iloc[-3], df.iloc[-2]
-    return prev["verde"] <= prev["media"] and last["verde"] > last["media"]
-
-
-def cruce_bajista(df: pd.DataFrame) -> bool:
-    """Verde sale de la montaña: cruza por debajo de media."""
-    if len(df) < 3:
-        return False
-    prev, last = df.iloc[-3], df.iloc[-2]
-    return prev["verde"] >= prev["media"] and last["verde"] < last["media"]
+    if prev["verde"] <= prev["media"] and last["verde"] > last["media"]:
+        return "alza"
+    if prev["verde"] >= prev["media"] and last["verde"] < last["media"]:
+        return "baja"
+    return None
 
 
 # --------------------------- ESTADO (anti-duplicados) ---------------------------
@@ -164,45 +167,39 @@ def send_telegram(message: str):
 
 
 # --------------------------- MAIN (una sola ejecucion) ---------------------------
+CROSS_INFO = {
+    "alza": ("Verde entra en la montaña (cruce al alza sobre media)", "last_alert_up_close_time"),
+    "baja": ("Verde sale de la montaña (cruce a la baja bajo media)", "last_alert_down_close_time"),
+}
+
+
 def main():
     df = compute_koncorde(get_klines())
     last_closed = df.iloc[-2]
     close_time_str = last_closed["close_time"].isoformat()
 
-    state = load_state()
-    ya_avisado_alza = state.get("last_alert_up_close_time") == close_time_str
-    ya_avisado_baja = state.get("last_alert_down_close_time") == close_time_str
-
-    señal_enviada = False
-
-    if cruce_alcista(df) and not ya_avisado_alza:
-        msg = (
-            f"Koncorde {SYMBOL} {INTERVAL}\n"
-            f"Verde entra en la montaña (cruce al alza sobre media)\n"
-            f"Vela cerrada: {close_time_str}\n"
-            f"Precio cierre: {last_closed['close']:.2f}"
-        )
-        print(msg)
-        send_telegram(msg)
-        state["last_alert_up_close_time"] = close_time_str
-        señal_enviada = True
-
-    if cruce_bajista(df) and not ya_avisado_baja:
-        msg = (
-            f"Koncorde {SYMBOL} {INTERVAL}\n"
-            f"Verde sale de la montaña (cruce a la baja bajo media)\n"
-            f"Vela cerrada: {close_time_str}\n"
-            f"Precio cierre: {last_closed['close']:.2f}"
-        )
-        print(msg)
-        send_telegram(msg)
-        state["last_alert_down_close_time"] = close_time_str
-        señal_enviada = True
-
-    if señal_enviada:
-        save_state(state)
-    else:
+    direccion = detectar_cruce(df)
+    if direccion is None:
         print(f"Sin señal nueva. Ultima vela cerrada: {close_time_str}")
+        return
+
+    descripcion, state_key = CROSS_INFO[direccion]
+    state = load_state()
+
+    if state.get(state_key) == close_time_str:
+        print(f"Señal ya avisada previamente. Ultima vela cerrada: {close_time_str}")
+        return
+
+    msg = (
+        f"Koncorde {SYMBOL} {INTERVAL}\n"
+        f"{descripcion}\n"
+        f"Vela cerrada: {close_time_str}\n"
+        f"Precio cierre: {last_closed['close']:.2f}"
+    )
+    print(msg)
+    send_telegram(msg)
+    state[state_key] = close_time_str
+    save_state(state)
 
 
 if __name__ == "__main__":
