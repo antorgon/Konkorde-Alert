@@ -1,8 +1,12 @@
 # Koncorde Alert (GitHub Actions)
 
-Revisa cada hora si el area **verde** del Koncorde cruza al alza la **media**
-para BTCUSDT (1H) y te avisa por Telegram. Corre gratis en los servidores de
-GitHub, no necesitas tener tu ordenador encendido.
+Revisa cada hora el Koncorde de BTCUSDT (1H) y te avisa por Telegram en dos
+casos:
+- **Verde entra en la montaña** — cruce al alza de verde sobre media.
+- **Verde sale de la montaña** — cruce a la baja de verde bajo media.
+
+Corre gratis en los servidores de GitHub, no necesitas tener tu ordenador
+encendido.
 
 ## Puesta en marcha (una sola vez)
 
@@ -41,9 +45,10 @@ Y ajusta el cron en `.github/workflows/koncorde.yml` si cambias el intervalo
 
 ## Notas
 
-- El archivo `state.json` guarda la ultima vela ya avisada para no mandarte
-  el mismo aviso repetido; el propio workflow lo actualiza y lo commitea
-  solo, no lo toques a mano.
+- El archivo `state.json` guarda la ultima vela ya avisada para cada tipo
+  de cruce (entrada y salida) por separado, para no mandarte el mismo aviso
+  repetido; el propio workflow lo actualiza y lo commitea solo, no lo
+  toques a mano.
 - La formula del Koncorde usada es una reconstruccion de codigo abierto de
   la comunidad (la version 2.0 oficial de Blai5 es codigo cerrado), asi que
   puede haber pequeñas diferencias frente a TradingView, aunque los cruces
