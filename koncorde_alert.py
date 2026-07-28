@@ -143,6 +143,46 @@ def detectar_cruce(df: pd.DataFrame) -> str | None:
     return None
 
 
+# --------------------------- TREND SPEED ANALYZER (Zeiierman) ---------------------------
+# Replica fiel del indicador "Trend Speed Analyzer (Zeiierman)" (codigo Pine
+# abierto, licencia CC BY-NC-SA 4.0), usado como confirmacion de tendencia:
+# verde/alcista cuando wma(close,2) > dyn_ema, rojo/bajista en caso contrario.
+TSA_MAX_LENGTH = 50        # 'Maximum Length' en el indicador original
+TSA_ACCEL_MULT = 5.0       # 'Accelerator Multiplier' en el indicador original
+
+
+def _wma(series: pd.Series, length: int) -> pd.Series:
+    weights = pd.Series(range(1, length + 1))
+    return series.rolling(length).apply(lambda x: (x * weights.values).sum() / weights.sum(), raw=True)
+
+
+def compute_trend_speed(df: pd.DataFrame, max_length: int = TSA_MAX_LENGTH,
+                         accel_multiplier: float = TSA_ACCEL_MULT) -> pd.DataFrame:
+    df = df.copy()
+    close = df["close"]
+
+    # Longitud dinamica en funcion del nivel de precio normalizado
+    max_abs_counts_diff = close.abs().rolling(200, min_periods=1).max()
+    counts_diff_norm = (close + max_abs_counts_diff) / (2 * max_abs_counts_diff)
+    dyn_length = 5 + counts_diff_norm * (max_length - 5)
+
+    # Factor acelerador en funcion de la variacion de precio
+    delta_counts_diff = close.diff().abs().fillna(0)
+    max_delta = delta_counts_diff.rolling(200, min_periods=1).max().replace(0, 1)
+    accel_factor = delta_counts_diff / max_delta
+
+    alpha = (2 / (dyn_length + 1)) * (1 + accel_factor * accel_multiplier)
+    alpha = alpha.clip(upper=1.0)
+
+    dyn_ema = [close.iloc[0]]
+    for i in range(1, len(df)):
+        dyn_ema.append(alpha.iloc[i] * close.iloc[i] + (1 - alpha.iloc[i]) * dyn_ema[-1])
+    df["dyn_ema"] = dyn_ema
+
+    df["tsa_bullish"] = _wma(close, 2) > df["dyn_ema"]
+    return df
+
+
 # --------------------------- ESTADO (anti-duplicados) ---------------------------
 def load_state() -> dict:
     if os.path.exists(STATE_FILE):
@@ -172,9 +212,24 @@ CROSS_INFO = {
     "baja": ("Verde sale de la montaña (cruce a la baja bajo media)", "last_alert_down_close_time"),
 }
 
+CONFIRMED_INFO = {
+    "alza": ("Entrada CONFIRMADA (cruce + valor + Trend Speed Analyzer alcista)", "last_confirmed_up_close_time"),
+    "baja": ("Salida CONFIRMADA (cruce + valor + Trend Speed Analyzer bajista)", "last_confirmed_down_close_time"),
+}
+
+# Rango valido del valor de "verde" en el momento del cruce, segun el
+# criterio: entrada valida si el cruce ocurre con la linea entre 0 y 50
+# (si ya esta por encima de 50 el movimiento lleva mucho recorrido y
+# aumenta el riesgo de "hachazo"). Para el cruce bajista se usa el rango
+# simetrico -50/0 (extrapolacion propia, el criterio original solo describe
+# el caso alcista).
+VALOR_MIN_ALZA, VALOR_MAX_ALZA = 0, 50
+VALOR_MIN_BAJA, VALOR_MAX_BAJA = -50, 0
+
 
 def main():
     df = compute_koncorde(get_klines())
+    df = compute_trend_speed(df)
     last_closed = df.iloc[-2]
     close_time_str = last_closed["close_time"].isoformat()
 
@@ -183,22 +238,53 @@ def main():
         print(f"Sin señal nueva. Ultima vela cerrada: {close_time_str}")
         return
 
-    descripcion, state_key = CROSS_INFO[direccion]
     state = load_state()
 
-    if state.get(state_key) == close_time_str:
-        print(f"Señal ya avisada previamente. Ultima vela cerrada: {close_time_str}")
-        return
+    # --- 1) Alerta inmediata del cruce, igual que antes de añadir filtros ---
+    descripcion, state_key = CROSS_INFO[direccion]
+    if state.get(state_key) != close_time_str:
+        msg = (
+            f"Koncorde {SYMBOL} {INTERVAL}\n"
+            f"{descripcion}\n"
+            f"Vela cerrada: {close_time_str}\n"
+            f"Precio cierre: {last_closed['close']:.2f}"
+        )
+        print(msg)
+        send_telegram(msg)
+        state[state_key] = close_time_str
+    else:
+        print(f"Cruce '{direccion}' ya avisado previamente. Vela cerrada: {close_time_str}")
 
-    msg = (
-        f"Koncorde {SYMBOL} {INTERVAL}\n"
-        f"{descripcion}\n"
-        f"Vela cerrada: {close_time_str}\n"
-        f"Precio cierre: {last_closed['close']:.2f}"
-    )
-    print(msg)
-    send_telegram(msg)
-    state[state_key] = close_time_str
+    # --- 2) Alerta adicional SOLO si tambien se cumplen valor + Trend Speed ---
+    verde_val = last_closed["verde"]
+    tsa_bullish = bool(last_closed["tsa_bullish"])
+
+    if direccion == "alza":
+        valor_ok = VALOR_MIN_ALZA <= verde_val <= VALOR_MAX_ALZA
+        tsa_ok = tsa_bullish
+    else:
+        valor_ok = VALOR_MIN_BAJA <= verde_val <= VALOR_MAX_BAJA
+        tsa_ok = not tsa_bullish
+
+    descripcion_conf, state_key_conf = CONFIRMED_INFO[direccion]
+
+    if valor_ok and tsa_ok and state.get(state_key_conf) != close_time_str:
+        msg_conf = (
+            f"Koncorde {SYMBOL} {INTERVAL}\n"
+            f"{descripcion_conf}\n"
+            f"Valor verde en el cruce: {verde_val:.1f}\n"
+            f"Vela cerrada: {close_time_str}\n"
+            f"Precio cierre: {last_closed['close']:.2f}"
+        )
+        print(msg_conf)
+        send_telegram(msg_conf)
+        state[state_key_conf] = close_time_str
+    elif not (valor_ok and tsa_ok):
+        print(
+            f"Confirmacion NO cumplida (verde={verde_val:.1f}, valor_ok={valor_ok}, "
+            f"trend_speed={'alcista' if tsa_bullish else 'bajista'}, tsa_ok={tsa_ok})."
+        )
+
     save_state(state)
 
 
