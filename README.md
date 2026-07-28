@@ -8,7 +8,7 @@ encendido.
 
 Por cada cruce detectado se envían hasta **2 mensajes independientes**:
 
-1. **Aviso inmediato del cruce** (como el original):
+1. **Aviso inmediato del cruce**:
    - *Verde entra en la montaña* — cruce al alza de verde sobre media.
    - *Verde sale de la montaña* — cruce a la baja de verde bajo media.
 2. **Aviso de confirmación** (solo si además se cumplen estas 2 condiciones):
@@ -26,16 +26,14 @@ Si solo se cumple el cruce, llega el primer mensaje y no el segundo.
 2. Sube estos archivos manteniendo la estructura de carpetas:
    ```
    .github/workflows/koncorde.yml
-   .github/workflows/backtest.yml
    koncorde_alert.py
-   backtest_koncorde.py
    requirements.txt
-   requirements-backtest.txt
    state.json
    ```
    (En GitHub: "Add file" -> "Upload files", arrastra la carpeta, o usa git
-   desde tu ordenador si prefieres. Para archivos dentro de `.github/workflows/`
-   usa "Add file" -> "Create new file" y escribe la ruta completa.)
+   desde tu ordenador si prefieres. Para el archivo dentro de
+   `.github/workflows/` usa "Add file" -> "Create new file" y escribe la
+   ruta completa.)
 3. Ve a **Settings -> Secrets and variables -> Actions -> New repository secret**
    y crea dos secrets:
    - `TELEGRAM_TOKEN` -> el token de tu bot
@@ -47,21 +45,6 @@ Si solo se cumple el cruce, llega el primer mensaje y no el segundo.
 
 A partir de aquí se ejecuta solo cada 30 minutos, para siempre (o hasta que
 lo pares desactivando el workflow).
-
-## Backtest de la estrategia
-
-Hay un segundo workflow, **Backtest Koncorde**, que se lanza a mano desde
-**Actions -> Backtest Koncorde -> Run workflow**. Descarga ~2 años de
-histórico, simula la estrategia (entra en el cruce alcista, sale en el
-bajista, con comisión del 0.1% por operación) y deja los resultados
-commiteados en el propio repo:
-
-- `backtest_results.md` — nº de operaciones, % de aciertos, rentabilidad
-  total, drawdown máximo, comparación contra comprar-y-mantener.
-- `backtest_equity.png` — gráfico de la curva de capital.
-
-Nota: el backtest actual simula solo el cruce básico, todavía no aplica el
-filtro de valor 0-50 ni la confirmación del Trend Speed Analyzer.
 
 ## Cambiar de par o de intervalo
 
