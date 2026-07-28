@@ -2,10 +2,10 @@ name: Koncorde Alert
 
 on:
   schedule:
-    # Se ejecuta a los 5 minutos de cada hora (deja margen a que Binance
-    # cierre la vela horaria antes de comprobarla). Ajusta el cron si usas
-    # otro INTERVAL en koncorde_alert.py (ej. "*/15 * * * *" para 15m).
-    - cron: "5 * * * *"
+    # Cada 30 minutos. Como las velas son de 1h, esto simplemente reduce el
+    # margen de espera tras el cierre de cada vela (antes podia tardar hasta
+    # ~60 min en detectarse, ahora hasta ~30 min).
+    - cron: "*/30 * * * *"
   workflow_dispatch: {}  # permite lanzarlo manualmente desde la pestaña Actions
 
 permissions:
@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
