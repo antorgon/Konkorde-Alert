@@ -1,14 +1,19 @@
 """
-Alerta Koncorde -> Telegram (modo "un solo chequeo")
-=====================================================
-Pensado para ejecutarse periodicamente vía GitHub Actions (o cron), no en
-bucle infinito. Cada ejecucion:
+Alerta Koncorde -> Telegram
+============================
+Se ejecuta repetidamente (cada 30 min) dentro del bucle del workflow de
+GitHub Actions (.github/workflows/koncorde.yml), que se auto-relanza cada
+~5h40m para funcionar de forma indefinida. Cada ejecucion de este script:
 
   1. Descarga velas de Binance
-  2. Calcula el Koncorde (verde, marron, azul, media)
-  3. Mira si en la ultima vela CERRADA "verde" cruzo al alza a "media"
-  4. Si es asi Y no se ha avisado ya de esa misma vela -> manda Telegram
-  5. Guarda en state.json la ultima vela avisada (para no duplicar alertas)
+  2. Calcula el Koncorde (verde, marron, azul, media) y el Trend Speed
+     Analyzer (dyn_ema, tsa_bullish)
+  3. Mira si en la ultima vela CERRADA "verde" cruzo la "media"
+  4. Manda por Telegram el aviso del cruce (siempre) y, si ademas se cumplen
+     el rango de valor y la confirmacion del Trend Speed Analyzer, un
+     segundo aviso de "entrada/salida CONFIRMADA"
+  5. Guarda en state.json la ultima vela avisada de cada tipo, para no
+     duplicar alertas entre ejecuciones
 
 Variables de entorno necesarias (se configuran como Secrets en GitHub):
   TELEGRAM_TOKEN
@@ -17,7 +22,8 @@ Variables de entorno necesarias (se configuran como Secrets en GitHub):
 Nota sobre precision: reconstruccion basada en versiones abiertas del
 Koncorde de Blai5 (la 2.0 oficial es codigo cerrado). Los cruces deberian
 coincidir con TradingView en la gran mayoria de los casos, pero no es un
-calco exacto.
+calco exacto. El Trend Speed Analyzer si es una replica fiel del Pine
+Script original (Zeiierman, licencia CC BY-NC-SA 4.0).
 """
 
 import os
@@ -26,6 +32,7 @@ import sys
 
 import requests
 import pandas as pd
+import numpy as np
 
 SYMBOL = "BTCUSDT"
 INTERVAL = "1h"
@@ -152,8 +159,10 @@ TSA_ACCEL_MULT = 5.0       # 'Accelerator Multiplier' en el indicador original
 
 
 def _wma(series: pd.Series, length: int) -> pd.Series:
-    weights = pd.Series(range(1, length + 1))
-    return series.rolling(length).apply(lambda x: (x * weights.values).sum() / weights.sum(), raw=True)
+    """Media movil ponderada linealmente, vectorizada (sin rolling().apply())."""
+    weights = pd.Series(range(1, length + 1), dtype=float)
+    weighted_sum = sum(series.shift(length - 1 - i) * w for i, w in enumerate(weights))
+    return weighted_sum / weights.sum()
 
 
 def compute_trend_speed(df: pd.DataFrame, max_length: int = TSA_MAX_LENGTH,
@@ -172,11 +181,17 @@ def compute_trend_speed(df: pd.DataFrame, max_length: int = TSA_MAX_LENGTH,
     accel_factor = delta_counts_diff / max_delta
 
     alpha = (2 / (dyn_length + 1)) * (1 + accel_factor * accel_multiplier)
-    alpha = alpha.clip(upper=1.0)
+    alpha = alpha.clip(upper=1.0).to_numpy()
 
-    dyn_ema = [close.iloc[0]]
+    # El calculo de dyn_ema es recursivo (cada valor depende del anterior),
+    # asi que no se puede vectorizar del todo, pero usar arrays de numpy en
+    # vez de acceder con .iloc fila a fila sobre la Series acelera bastante
+    # el bucle al evitar el overhead de pandas en cada iteracion.
+    close_arr = close.to_numpy()
+    dyn_ema = np.empty(len(df))
+    dyn_ema[0] = close_arr[0]
     for i in range(1, len(df)):
-        dyn_ema.append(alpha.iloc[i] * close.iloc[i] + (1 - alpha.iloc[i]) * dyn_ema[-1])
+        dyn_ema[i] = alpha[i] * close_arr[i] + (1 - alpha[i]) * dyn_ema[i - 1]
     df["dyn_ema"] = dyn_ema
 
     df["tsa_bullish"] = _wma(close, 2) > df["dyn_ema"]
@@ -239,6 +254,7 @@ def main():
         return
 
     state = load_state()
+    state_changed = False
 
     # --- 1) Alerta inmediata del cruce, igual que antes de añadir filtros ---
     descripcion, state_key = CROSS_INFO[direccion]
@@ -252,6 +268,7 @@ def main():
         print(msg)
         send_telegram(msg)
         state[state_key] = close_time_str
+        state_changed = True
     else:
         print(f"Cruce '{direccion}' ya avisado previamente. Vela cerrada: {close_time_str}")
 
@@ -279,13 +296,15 @@ def main():
         print(msg_conf)
         send_telegram(msg_conf)
         state[state_key_conf] = close_time_str
+        state_changed = True
     elif not (valor_ok and tsa_ok):
         print(
             f"Confirmacion NO cumplida (verde={verde_val:.1f}, valor_ok={valor_ok}, "
             f"trend_speed={'alcista' if tsa_bullish else 'bajista'}, tsa_ok={tsa_ok})."
         )
 
-    save_state(state)
+    if state_changed:
+        save_state(state)
 
 
 if __name__ == "__main__":
