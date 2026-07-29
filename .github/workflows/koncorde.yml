@@ -1,19 +1,26 @@
 name: Koncorde Alert
 
 on:
+  workflow_dispatch: {}   # arranque manual (o auto-relanzamiento, ver ultimo paso)
   schedule:
-    # Cada 15 minutos (temporalmente, para diagnosticar por que no salta el
-    # cron automatico). Minutos 7/22/37/52 para evitar la congestion de
-    # :00/:15/:30/:45.
-    - cron: "* * * * *"
-  workflow_dispatch: {}  # permite lanzarlo manualmente desde la pestaña Actions
+    # Red de seguridad: 1 vez al dia, solo por si la cadena de
+    # auto-relanzamiento se rompiera alguna vez. La proteccion de
+    # 'concurrency' de abajo evita que esto cree una segunda cadena en
+    # paralelo si la anterior sigue viva.
+    - cron: "13 4 * * *"
 
 permissions:
-  contents: write  # necesario para poder commitear state.json
+  contents: write   # para poder commitear state.json
+  actions: write    # para poder auto-relanzarse via la API
+
+concurrency:
+  group: koncorde-loop
+  cancel-in-progress: false   # si ya hay una cadena corriendo, la nueva espera en cola en vez de duplicarse
 
 jobs:
   check-koncorde:
     runs-on: ubuntu-latest
+    timeout-minutes: 350   # deja margen bajo el limite duro de 360 min (6h) de GitHub
     steps:
       - name: Checkout repo
         uses: actions/checkout@v5
@@ -26,16 +33,37 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run Koncorde check
+      - name: Bucle de chequeos cada 30 min durante ~5h40m
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python koncorde_alert.py
-
-      - name: Commit updated state (anti-duplicados)
         run: |
           git config user.name "koncorde-bot"
           git config user.email "actions@github.com"
-          git add state.json
-          git diff --staged --quiet || git commit -m "Update alert state [skip ci]"
-          git push
+
+          END=$((SECONDS + 20400))  # 5h40m en segundos, deja margen para el paso final
+          while [ $SECONDS -lt $END ]; do
+            python koncorde_alert.py || true
+
+            git add state.json
+            if ! git diff --staged --quiet; then
+              git commit -m "Update alert state [skip ci]"
+              git pull --rebase || true
+              git push || echo "push fallido, se sigue con el bucle igualmente"
+            fi
+
+            sleep 1800   # 30 minutos
+          done
+
+      - name: Relanzar el siguiente ciclo (auto-perpetuacion)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/koncorde.yml/dispatches" \
+            -d '{"ref":"${{ github.ref_name }}"}' \
+            && echo "Siguiente ciclo lanzado correctamente" \
+            || echo "No se pudo relanzar el siguiente ciclo (revisar permisos)"
