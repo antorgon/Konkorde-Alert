@@ -221,15 +221,17 @@ def send_telegram(message: str):
     r.raise_for_status()
 
 
-# --------------------------- MAIN (una sola ejecucion) ---------------------------
-CROSS_INFO = {
-    "alza": ("Verde entra en la montaña (cruce al alza sobre media)", "last_alert_up_close_time"),
-    "baja": ("Verde sale de la montaña (cruce a la baja bajo media)", "last_alert_down_close_time"),
+# --------------------------- MAIN (revisa varias temporalidades) ---------------------------
+INTERVALS = ["1h", "4h", "1d"]  # temporalidades revisadas en cada pasada
+
+CROSS_DESC = {
+    "alza": "Verde entra en la montaña (cruce al alza sobre media)",
+    "baja": "Verde sale de la montaña (cruce a la baja bajo media)",
 }
 
-CONFIRMED_INFO = {
-    "alza": ("Entrada CONFIRMADA (cruce + valor + Trend Speed Analyzer alcista)", "last_confirmed_up_close_time"),
-    "baja": ("Salida CONFIRMADA (cruce + valor + Trend Speed Analyzer bajista)", "last_confirmed_down_close_time"),
+CONFIRMED_DESC = {
+    "alza": "Entrada CONFIRMADA (cruce + valor + Trend Speed Analyzer alcista)",
+    "baja": "Salida CONFIRMADA (cruce + valor + Trend Speed Analyzer bajista)",
 }
 
 # Rango valido del valor de "verde" en el momento del cruce, segun el
@@ -237,31 +239,32 @@ CONFIRMED_INFO = {
 # (si ya esta por encima de 50 el movimiento lleva mucho recorrido y
 # aumenta el riesgo de "hachazo"). Para el cruce bajista se usa el rango
 # simetrico -50/0 (extrapolacion propia, el criterio original solo describe
-# el caso alcista).
+# el caso alcista). Mismo criterio aplicado a las 3 temporalidades.
 VALOR_MIN_ALZA, VALOR_MAX_ALZA = 0, 50
 VALOR_MIN_BAJA, VALOR_MAX_BAJA = -50, 0
 
 
-def main():
-    df = compute_koncorde(get_klines())
+def revisar_intervalo(interval: str, state: dict) -> bool:
+    """Revisa una temporalidad y actualiza 'state' in-place.
+    Devuelve True si el estado cambio (para saber si hay que guardar)."""
+    df = compute_koncorde(get_klines(interval=interval))
     df = compute_trend_speed(df)
     last_closed = df.iloc[-2]
     close_time_str = last_closed["close_time"].isoformat()
 
     direccion = detectar_cruce(df)
     if direccion is None:
-        print(f"Sin señal nueva. Ultima vela cerrada: {close_time_str}")
-        return
+        print(f"[{interval}] Sin señal nueva. Ultima vela cerrada: {close_time_str}")
+        return False
 
-    state = load_state()
     state_changed = False
 
-    # --- 1) Alerta inmediata del cruce, igual que antes de añadir filtros ---
-    descripcion, state_key = CROSS_INFO[direccion]
+    # --- 1) Alerta inmediata del cruce ---
+    state_key = f"last_alert_{('up' if direccion == 'alza' else 'down')}_close_time_{interval}"
     if state.get(state_key) != close_time_str:
         msg = (
-            f"Koncorde {SYMBOL} {INTERVAL}\n"
-            f"{descripcion}\n"
+            f"Koncorde {SYMBOL} {interval}\n"
+            f"{CROSS_DESC[direccion]}\n"
             f"Vela cerrada: {close_time_str}\n"
             f"Precio cierre: {last_closed['close']:.2f}"
         )
@@ -270,7 +273,7 @@ def main():
         state[state_key] = close_time_str
         state_changed = True
     else:
-        print(f"Cruce '{direccion}' ya avisado previamente. Vela cerrada: {close_time_str}")
+        print(f"[{interval}] Cruce '{direccion}' ya avisado previamente. Vela cerrada: {close_time_str}")
 
     # --- 2) Alerta adicional SOLO si tambien se cumplen valor + Trend Speed ---
     verde_val = last_closed["verde"]
@@ -283,12 +286,12 @@ def main():
         valor_ok = VALOR_MIN_BAJA <= verde_val <= VALOR_MAX_BAJA
         tsa_ok = not tsa_bullish
 
-    descripcion_conf, state_key_conf = CONFIRMED_INFO[direccion]
+    state_key_conf = f"last_confirmed_{('up' if direccion == 'alza' else 'down')}_close_time_{interval}"
 
     if valor_ok and tsa_ok and state.get(state_key_conf) != close_time_str:
         msg_conf = (
-            f"Koncorde {SYMBOL} {INTERVAL}\n"
-            f"{descripcion_conf}\n"
+            f"Koncorde {SYMBOL} {interval}\n"
+            f"{CONFIRMED_DESC[direccion]}\n"
             f"Valor verde en el cruce: {verde_val:.1f}\n"
             f"Vela cerrada: {close_time_str}\n"
             f"Precio cierre: {last_closed['close']:.2f}"
@@ -299,9 +302,25 @@ def main():
         state_changed = True
     elif not (valor_ok and tsa_ok):
         print(
-            f"Confirmacion NO cumplida (verde={verde_val:.1f}, valor_ok={valor_ok}, "
+            f"[{interval}] Confirmacion NO cumplida (verde={verde_val:.1f}, valor_ok={valor_ok}, "
             f"trend_speed={'alcista' if tsa_bullish else 'bajista'}, tsa_ok={tsa_ok})."
         )
+
+    return state_changed
+
+
+def main():
+    state = load_state()
+    state_changed = False
+
+    for interval in INTERVALS:
+        try:
+            if revisar_intervalo(interval, state):
+                state_changed = True
+        except Exception as e:
+            # Si falla una temporalidad (ej. un fallo puntual de red), las
+            # demas se siguen revisando igualmente.
+            print(f"[{interval}] [ERROR] {e}")
 
     if state_changed:
         save_state(state)
