@@ -1,6 +1,7 @@
 # Koncorde Alert (GitHub Actions, auto-perpetuo)
 
-Revisa el Koncorde de BTCUSDT (1H) cada 30 minutos y te avisa por Telegram.
+Revisa el Koncorde de BTCUSDT en 3 temporalidades (1h, 4h y 1d) cada 30
+minutos y te avisa por Telegram.
 Corre gratis en los servidores de GitHub, indefinidamente, sin que tengas
 que tener tu ordenador encendido ni depender de ningún servicio externo.
 
@@ -29,9 +30,22 @@ salga gratis. En un repo privado, tener un job corriendo casi 24/7 consume
 muchísimos minutos de Actions y se agotaría el cupo gratuito del plan
 (2.000 min/mes) enseguida.
 
+## Temporalidades
+
+Cada pasada revisa **1h, 4h y 1d** de forma independiente (cada una con su
+propio calculo de Koncorde y de Trend Speed Analyzer, y su propio control
+anti-duplicados en `state.json`). Un cruce en una temporalidad no afecta ni
+se mezcla con las demas. Para añadir o quitar temporalidades, edita la
+lista al principio de `koncorde_alert.py`:
+```python
+INTERVALS = ["1h", "4h", "1d"]
+```
+
 ## Qué avisos manda
 
-Por cada cruce detectado se envían hasta **2 mensajes independientes**:
+Por cada cruce detectado (en cualquiera de las 3 temporalidades) se envían
+hasta **2 mensajes independientes**, indicando siempre a que temporalidad
+corresponde (ej. "Koncorde BTCUSDT 4h"):
 
 1. **Aviso inmediato del cruce**:
    - *Verde entra en la montaña* — cruce al alza de verde sobre media.
@@ -81,12 +95,12 @@ Entra en la pestaña Actions:
   ciclo") o simplemente vuelve a darle a "Run workflow" para reiniciar la
   cadena manualmente.
 
-## Cambiar de par o de intervalo
+## Cambiar de par o de temporalidades
 
 Edita en `koncorde_alert.py`:
 ```python
 SYMBOL = "BTCUSDT"
-INTERVAL = "1h"
+INTERVALS = ["1h", "4h", "1d"]
 ```
 Y en `.github/workflows/koncorde.yml`, la línea `sleep 1800` (segundos =
 30 min) dentro del bucle, si quieres otra frecuencia de chequeo.
@@ -94,8 +108,8 @@ Y en `.github/workflows/koncorde.yml`, la línea `sleep 1800` (segundos =
 ## Notas
 
 - `state.json` guarda, por separado, la última vela ya avisada para cada
-  uno de los 4 tipos de aviso (cruce alza, cruce baja, confirmado alza,
-  confirmado baja), para no repetir mensajes. El propio workflow lo
+  combinación de temporalidad y tipo de aviso (4 tipos × 3 temporalidades =
+  hasta 12 claves), para no repetir mensajes. El propio workflow lo
   actualiza y lo commitea solo, no lo toques a mano.
 - La fórmula del Koncorde usada es una reconstrucción de código abierto de
   la comunidad (la versión 2.0 oficial de Blai5 es código cerrado), así que
@@ -103,3 +117,6 @@ Y en `.github/workflows/koncorde.yml`, la línea `sleep 1800` (segundos =
   deberían coincidir en la gran mayoría de los casos.
 - El Trend Speed Analyzer sí es una réplica exacta del Pine Script original
   (Zeiierman, licencia CC BY-NC-SA 4.0), no una aproximación.
+- Las 3 peticiones a Binance de cada pasada (una por temporalidad) reutilizan
+  la misma conexión HTTPS (`requests.Session`), en vez de abrir una nueva
+  por cada una.
