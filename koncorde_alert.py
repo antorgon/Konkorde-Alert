@@ -47,11 +47,17 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 # IPs de EEUU (como las que usa GitHub Actions), asi que evita el error 451.
 BINANCE_KLINES_URL = "https://data-api.binance.vision/api/v3/klines"
 
+# Sesion compartida: al revisar varias temporalidades en cada pasada se
+# hacen varias peticiones seguidas al mismo host (Binance), y una Session
+# reutiliza la conexion TCP/TLS entre ellas en vez de abrir una nueva por
+# cada peticion.
+_session = requests.Session()
+
 
 # --------------------------- DATOS DE MERCADO ---------------------------
 def get_klines(symbol=SYMBOL, interval=INTERVAL, limit=LOOKBACK) -> pd.DataFrame:
     params = {"symbol": symbol, "interval": interval, "limit": limit}
-    resp = requests.get(BINANCE_KLINES_URL, params=params, timeout=15)
+    resp = _session.get(BINANCE_KLINES_URL, params=params, timeout=15)
     resp.raise_for_status()
     raw = resp.json()
 
@@ -217,7 +223,7 @@ def send_telegram(message: str):
         print("[AVISO] Faltan TELEGRAM_TOKEN / TELEGRAM_CHAT_ID, no se envia mensaje.")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    r = requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": message}, timeout=10)
+    r = _session.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": message}, timeout=10)
     r.raise_for_status()
 
 
