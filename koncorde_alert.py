@@ -6,12 +6,13 @@ GitHub Actions (.github/workflows/koncorde.yml), que se auto-relanza cada
 ~5h40m para funcionar de forma indefinida. Cada ejecucion de este script:
 
   1. Descarga velas de Binance
-  2. Calcula el Koncorde (verde, marron, azul, media) y el Trend Speed
-     Analyzer (dyn_ema, tsa_bullish)
+  2. Calcula el Koncorde (verde, marron, azul, media), el Trend Speed
+     Analyzer (dyn_ema, tsa_bullish) y el ADX (fuerza de tendencia)
   3. Mira si en la ultima vela CERRADA "verde" cruzo la "media"
   4. Manda por Telegram el aviso del cruce (siempre) y, si ademas se cumplen
-     el rango de valor y la confirmacion del Trend Speed Analyzer, un
-     segundo aviso de "entrada/salida CONFIRMADA"
+     el rango de valor, la confirmacion del Trend Speed Analyzer y el ADX
+     indicando tendencia con fuerza suficiente, un segundo aviso de
+     "entrada/salida CONFIRMADA"
   5. Guarda en state.json la ultima vela avisada de cada tipo, para no
      duplicar alertas entre ejecuciones
 
@@ -23,7 +24,9 @@ Nota sobre precision: reconstruccion basada en versiones abiertas del
 Koncorde de Blai5 (la 2.0 oficial es codigo cerrado). Los cruces deberian
 coincidir con TradingView en la gran mayoria de los casos, pero no es un
 calco exacto. El Trend Speed Analyzer si es una replica fiel del Pine
-Script original (Zeiierman, licencia CC BY-NC-SA 4.0).
+Script original (Zeiierman, licencia CC BY-NC-SA 4.0). El ADX usa la
+formula estandar de Wilder (ta.dmi de Pine), tambien una replica fiel, no
+una aproximacion.
 """
 
 import os
@@ -204,6 +207,54 @@ def compute_trend_speed(df: pd.DataFrame, max_length: int = TSA_MAX_LENGTH,
     return df
 
 
+# --------------------------- ADX (fuerza de tendencia, DMI de Wilder) ---------------------------
+# Replica de "EMA 50 ADX por intensidad": ta.dmi(14,14) + una EMA(3) extra
+# de suavizado sobre el ADX resultante. Se usa como tercer filtro de
+# confirmacion: exige que haya tendencia con fuerza suficiente, algo que ni
+# el Koncorde ni el Trend Speed Analyzer miden por si solos (ambos miran
+# direccion/momentum, no fuerza de tendencia).
+ADX_DI_LENGTH = 14
+ADX_SMOOTHING = 14
+ADX_EMA_SMOOTH = 3
+ADX_MEDIO = 20.0   # umbral minimo para considerar que hay tendencia
+
+
+def _rma(series: pd.Series, length: int) -> pd.Series:
+    """Suavizado de Wilder (equivalente a ta.rma de Pine): EMA con
+    alpha = 1/length."""
+    return series.ewm(alpha=1 / length, adjust=False).mean()
+
+
+def compute_adx(df: pd.DataFrame, di_length: int = ADX_DI_LENGTH,
+                 adx_smoothing: int = ADX_SMOOTHING, ema_smooth: int = ADX_EMA_SMOOTH) -> pd.DataFrame:
+    df = df.copy()
+    high, low, close = df["high"], df["low"], df["close"]
+    prev_high, prev_low, prev_close = high.shift(1), low.shift(1), close.shift(1)
+
+    up_move = high - prev_high
+    down_move = prev_low - low
+    plus_dm = pd.Series(np.where((up_move > down_move) & (up_move > 0), up_move, 0.0), index=df.index)
+    minus_dm = pd.Series(np.where((down_move > up_move) & (down_move > 0), down_move, 0.0), index=df.index)
+
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs(),
+    ], axis=1).max(axis=1)
+
+    tr_smooth = _rma(tr, di_length)
+    di_plus = 100 * _rma(plus_dm, di_length) / tr_smooth
+    di_minus = 100 * _rma(minus_dm, di_length) / tr_smooth
+
+    dx = 100 * (di_plus - di_minus).abs() / (di_plus + di_minus)
+    adx_raw = _rma(dx, adx_smoothing)
+
+    df["di_plus"] = di_plus
+    df["di_minus"] = di_minus
+    df["adx"] = adx_raw.ewm(span=ema_smooth, adjust=False).mean()
+    return df
+
+
 # --------------------------- ESTADO (anti-duplicados) ---------------------------
 def load_state() -> dict:
     if os.path.exists(STATE_FILE):
@@ -236,8 +287,13 @@ CROSS_DESC = {
 }
 
 CONFIRMED_DESC = {
-    "alza": "Entrada CONFIRMADA (cruce + valor + Trend Speed Analyzer alcista)",
-    "baja": "Salida CONFIRMADA (cruce + valor + Trend Speed Analyzer bajista)",
+    "alza": "Entrada CONFIRMADA (3/3: cruce + valor + Trend Speed Analyzer + ADX alcista)",
+    "baja": "Salida CONFIRMADA (3/3: cruce + valor + Trend Speed Analyzer + ADX bajista)",
+}
+
+PARTIAL_DESC = {
+    "alza": "Entrada PARCIAL (2/3 condiciones alcistas)",
+    "baja": "Salida PARCIAL (2/3 condiciones bajistas)",
 }
 
 # Rango valido del valor de "verde" en el momento del cruce, segun el
@@ -255,6 +311,7 @@ def revisar_intervalo(interval: str, state: dict) -> bool:
     Devuelve True si el estado cambio (para saber si hay que guardar)."""
     df = compute_koncorde(get_klines(interval=interval))
     df = compute_trend_speed(df)
+    df = compute_adx(df)
     last_closed = df.iloc[-2]
     close_time_str = last_closed["close_time"].isoformat()
 
@@ -265,14 +322,43 @@ def revisar_intervalo(interval: str, state: dict) -> bool:
 
     state_changed = False
 
-    # --- 1) Alerta inmediata del cruce ---
+    # --- Evaluar las 3 condiciones (se usan tanto en el desglose del
+    # mensaje 1 como en los avisos de confirmacion parcial/total) ---
+    verde_val = last_closed["verde"]
+    tsa_bullish = bool(last_closed["tsa_bullish"])
+    adx_val = last_closed["adx"]
+    di_plus, di_minus = last_closed["di_plus"], last_closed["di_minus"]
+
+    if direccion == "alza":
+        valor_ok = VALOR_MIN_ALZA <= verde_val <= VALOR_MAX_ALZA
+        tsa_ok = tsa_bullish
+        adx_ok = adx_val >= ADX_MEDIO and di_plus > di_minus
+    else:
+        valor_ok = VALOR_MIN_BAJA <= verde_val <= VALOR_MAX_BAJA
+        tsa_ok = not tsa_bullish
+        adx_ok = adx_val >= ADX_MEDIO and di_minus > di_plus
+
+    n_ok = sum([valor_ok, tsa_ok, adx_ok])
+
+    def _icono(ok):
+        return "✅" if ok else "❌"
+
+    desglose = (
+        f"Valor verde: {verde_val:.1f} {_icono(valor_ok)} (rango {VALOR_MIN_ALZA if direccion == 'alza' else VALOR_MIN_BAJA}"
+        f" a {VALOR_MAX_ALZA if direccion == 'alza' else VALOR_MAX_BAJA})\n"
+        f"Trend Speed Analyzer: {'alcista' if tsa_bullish else 'bajista'} {_icono(tsa_ok)}\n"
+        f"ADX: {adx_val:.1f} {_icono(adx_ok)} (≥{ADX_MEDIO:.0f} y DI dominante a favor)"
+    )
+
+    # --- 1) Alerta inmediata del cruce, con el desglose de las 3 condiciones ---
     state_key = f"last_alert_{('up' if direccion == 'alza' else 'down')}_close_time_{interval}"
     if state.get(state_key) != close_time_str:
         msg = (
             f"Koncorde {SYMBOL} {interval}\n"
             f"{CROSS_DESC[direccion]}\n"
             f"Vela cerrada: {close_time_str}\n"
-            f"Precio cierre: {last_closed['close']:.2f}"
+            f"Precio cierre: {last_closed['close']:.2f}\n\n"
+            f"{desglose}"
         )
         print(msg)
         send_telegram(msg)
@@ -281,35 +367,39 @@ def revisar_intervalo(interval: str, state: dict) -> bool:
     else:
         print(f"[{interval}] Cruce '{direccion}' ya avisado previamente. Vela cerrada: {close_time_str}")
 
-    # --- 2) Alerta adicional SOLO si tambien se cumplen valor + Trend Speed ---
-    verde_val = last_closed["verde"]
-    tsa_bullish = bool(last_closed["tsa_bullish"])
-
-    if direccion == "alza":
-        valor_ok = VALOR_MIN_ALZA <= verde_val <= VALOR_MAX_ALZA
-        tsa_ok = tsa_bullish
+    # --- 2) Confirmacion TOTAL (3/3) o PARCIAL (2/3), nunca las dos a la vez ---
+    if n_ok == 3:
+        state_key_conf = f"last_confirmed_{('up' if direccion == 'alza' else 'down')}_close_time_{interval}"
+        if state.get(state_key_conf) != close_time_str:
+            msg_conf = (
+                f"Koncorde {SYMBOL} {interval}\n"
+                f"{CONFIRMED_DESC[direccion]}\n"
+                f"Vela cerrada: {close_time_str}\n"
+                f"Precio cierre: {last_closed['close']:.2f}"
+            )
+            print(msg_conf)
+            send_telegram(msg_conf)
+            state[state_key_conf] = close_time_str
+            state_changed = True
+    elif n_ok == 2:
+        state_key_partial = f"last_partial_{('up' if direccion == 'alza' else 'down')}_close_time_{interval}"
+        if state.get(state_key_partial) != close_time_str:
+            fallo = "valor" if not valor_ok else ("Trend Speed Analyzer" if not tsa_ok else "ADX")
+            msg_partial = (
+                f"Koncorde {SYMBOL} {interval}\n"
+                f"{PARTIAL_DESC[direccion]}\n"
+                f"Falta: {fallo}\n"
+                f"Vela cerrada: {close_time_str}\n"
+                f"Precio cierre: {last_closed['close']:.2f}"
+            )
+            print(msg_partial)
+            send_telegram(msg_partial)
+            state[state_key_partial] = close_time_str
+            state_changed = True
     else:
-        valor_ok = VALOR_MIN_BAJA <= verde_val <= VALOR_MAX_BAJA
-        tsa_ok = not tsa_bullish
-
-    state_key_conf = f"last_confirmed_{('up' if direccion == 'alza' else 'down')}_close_time_{interval}"
-
-    if valor_ok and tsa_ok and state.get(state_key_conf) != close_time_str:
-        msg_conf = (
-            f"Koncorde {SYMBOL} {interval}\n"
-            f"{CONFIRMED_DESC[direccion]}\n"
-            f"Valor verde en el cruce: {verde_val:.1f}\n"
-            f"Vela cerrada: {close_time_str}\n"
-            f"Precio cierre: {last_closed['close']:.2f}"
-        )
-        print(msg_conf)
-        send_telegram(msg_conf)
-        state[state_key_conf] = close_time_str
-        state_changed = True
-    elif not (valor_ok and tsa_ok):
         print(
-            f"[{interval}] Confirmacion NO cumplida (verde={verde_val:.1f}, valor_ok={valor_ok}, "
-            f"trend_speed={'alcista' if tsa_bullish else 'bajista'}, tsa_ok={tsa_ok})."
+            f"[{interval}] Solo {n_ok}/3 condiciones cumplidas "
+            f"(valor_ok={valor_ok}, tsa_ok={tsa_ok}, adx_ok={adx_ok}). Sin aviso adicional."
         )
 
     return state_changed
