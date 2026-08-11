@@ -33,7 +33,7 @@ muchísimos minutos de Actions y se agotaría el cupo gratuito del plan
 ## Temporalidades
 
 Cada pasada revisa **1h, 4h y 1d** de forma independiente (cada una con su
-propio calculo de Koncorde y de Trend Speed Analyzer, y su propio control
+propio calculo de Koncorde, Trend Speed Analyzer y ADX, y su propio control
 anti-duplicados en `state.json`). Un cruce en una temporalidad no afecta ni
 se mezcla con las demas. Para añadir o quitar temporalidades, edita la
 lista al principio de `koncorde_alert.py`:
@@ -44,20 +44,27 @@ INTERVALS = ["1h", "4h", "1d"]
 ## Qué avisos manda
 
 Por cada cruce detectado (en cualquiera de las 3 temporalidades) se envían
-hasta **2 mensajes independientes**, indicando siempre a que temporalidad
-corresponde (ej. "Koncorde BTCUSDT 4h"):
+hasta **2 mensajes**, indicando siempre a que temporalidad corresponde
+(ej. "Koncorde BTCUSDT 4h"):
 
-1. **Aviso inmediato del cruce**:
+1. **Aviso del cruce** (siempre que hay cruce), con el desglose ✅/❌ de las
+   3 condiciones en ese mismo mensaje:
    - *Verde entra en la montaña* — cruce al alza de verde sobre media.
    - *Verde sale de la montaña* — cruce a la baja de verde bajo media.
-2. **Aviso de confirmación** (solo si además se cumplen estas 2 condiciones):
-   - El valor de `verde` en el momento del cruce está entre **0 y 50** (alza)
-     o entre **-50 y 0** (baja — rango simétrico asumido, el criterio
-     original solo describe el caso alcista).
-   - El **Trend Speed Analyzer (Zeiierman)** confirma la misma dirección
-     (línea dinámica alcista para entradas, bajista para salidas).
+2. **Aviso adicional**, según cuántas de las 3 condiciones se cumplan:
+   - **3/3 → "CONFIRMADA"**: valor + Trend Speed Analyzer + ADX, las 3 a
+     favor de la misma dirección del cruce.
+   - **2/3 → "PARCIAL"**: solo 2 de las 3 (indica cuál falta).
+   - **0/3 o 1/3 → sin segundo mensaje** (solo queda el desglose del primero).
 
-Si solo se cumple el cruce, llega el primer mensaje y no el segundo.
+Las 3 condiciones:
+- El valor de `verde` en el momento del cruce está entre **0 y 50** (alza)
+  o entre **-50 y 0** (baja — rango simétrico asumido, el criterio
+  original solo describe el caso alcista).
+- El **Trend Speed Analyzer (Zeiierman)** confirma la misma dirección
+  (línea dinámica alcista para entradas, bajista para salidas).
+- El **ADX** (fuerza de tendencia, fórmula de Wilder) está por encima de
+  20 y el DI dominante coincide con la dirección del cruce.
 
 ## Puesta en marcha (una sola vez)
 
@@ -108,15 +115,17 @@ Y en `.github/workflows/koncorde.yml`, la línea `sleep 1800` (segundos =
 ## Notas
 
 - `state.json` guarda, por separado, la última vela ya avisada para cada
-  combinación de temporalidad y tipo de aviso (4 tipos × 3 temporalidades =
-  hasta 12 claves), para no repetir mensajes. El propio workflow lo
-  actualiza y lo commitea solo, no lo toques a mano.
+  combinación de temporalidad y tipo de aviso (cruce alza/baja + parcial
+  alza/baja + confirmado alza/baja = 6 tipos × 3 temporalidades = hasta 18
+  claves), para no repetir mensajes. El propio workflow lo actualiza y lo
+  commitea solo, no lo toques a mano.
 - La fórmula del Koncorde usada es una reconstrucción de código abierto de
   la comunidad (la versión 2.0 oficial de Blai5 es código cerrado), así que
   puede haber pequeñas diferencias frente a TradingView, aunque los cruces
   deberían coincidir en la gran mayoría de los casos.
-- El Trend Speed Analyzer sí es una réplica exacta del Pine Script original
-  (Zeiierman, licencia CC BY-NC-SA 4.0), no una aproximación.
+- El Trend Speed Analyzer y el ADX sí son réplicas exactas de sus fórmulas
+  originales (Trend Speed Analyzer: Zeiierman, CC BY-NC-SA 4.0; ADX: fórmula
+  estándar de Wilder / `ta.dmi` de Pine), no aproximaciones.
 - Las 3 peticiones a Binance de cada pasada (una por temporalidad) reutilizan
   la misma conexión HTTPS (`requests.Session`), en vez de abrir una nueva
   por cada una.
