@@ -339,6 +339,7 @@ def revisar_intervalo(interval: str, state: dict) -> bool:
         adx_ok = adx_val >= ADX_MEDIO and di_minus > di_plus
 
     n_ok = sum([valor_ok, tsa_ok, adx_ok])
+    sufijo = "up" if direccion == "alza" else "down"  # se usa en las 3 claves de estado de abajo
 
     def _icono(ok):
         return "✅" if ok else "❌"
@@ -351,7 +352,7 @@ def revisar_intervalo(interval: str, state: dict) -> bool:
     )
 
     # --- 1) Alerta inmediata del cruce, con el desglose de las 3 condiciones ---
-    state_key = f"last_alert_{('up' if direccion == 'alza' else 'down')}_close_time_{interval}"
+    state_key = f"last_alert_{sufijo}_close_time_{interval}"
     if state.get(state_key) != close_time_str:
         msg = (
             f"Koncorde {SYMBOL} {interval}\n"
@@ -369,7 +370,7 @@ def revisar_intervalo(interval: str, state: dict) -> bool:
 
     # --- 2) Confirmacion TOTAL (3/3) o PARCIAL (2/3), nunca las dos a la vez ---
     if n_ok == 3:
-        state_key_conf = f"last_confirmed_{('up' if direccion == 'alza' else 'down')}_close_time_{interval}"
+        state_key_conf = f"last_confirmed_{sufijo}_close_time_{interval}"
         if state.get(state_key_conf) != close_time_str:
             msg_conf = (
                 f"Koncorde {SYMBOL} {interval}\n"
@@ -382,7 +383,7 @@ def revisar_intervalo(interval: str, state: dict) -> bool:
             state[state_key_conf] = close_time_str
             state_changed = True
     elif n_ok == 2:
-        state_key_partial = f"last_partial_{('up' if direccion == 'alza' else 'down')}_close_time_{interval}"
+        state_key_partial = f"last_partial_{sufijo}_close_time_{interval}"
         if state.get(state_key_partial) != close_time_str:
             fallo = "valor" if not valor_ok else ("Trend Speed Analyzer" if not tsa_ok else "ADX")
             msg_partial = (
