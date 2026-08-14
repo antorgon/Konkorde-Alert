@@ -27,6 +27,11 @@ calco exacto. El Trend Speed Analyzer si es una replica fiel del Pine
 Script original (Zeiierman, licencia CC BY-NC-SA 4.0). El ADX usa la
 formula estandar de Wilder (ta.dmi de Pine), tambien una replica fiel, no
 una aproximacion.
+
+Los rangos de valor de "verde" (VALOR_MIN_ALZA/VALOR_MAX_ALZA/VALOR_MAX_BAJA
+mas abajo) estan ajustados con datos reales, no con suposiciones: ver
+analisis_valor_verde.py para el analisis completo sobre ~10 años de
+historico de BTCUSDT.
 """
 
 import os
@@ -296,14 +301,29 @@ PARTIAL_DESC = {
     "baja": "Salida PARCIAL (2/3 condiciones bajistas)",
 }
 
-# Rango valido del valor de "verde" en el momento del cruce, segun el
-# criterio: entrada valida si el cruce ocurre con la linea entre 0 y 50
-# (si ya esta por encima de 50 el movimiento lleva mucho recorrido y
-# aumenta el riesgo de "hachazo"). Para el cruce bajista se usa el rango
-# simetrico -50/0 (extrapolacion propia, el criterio original solo describe
-# el caso alcista). Mismo criterio aplicado a las 3 temporalidades.
-VALOR_MIN_ALZA, VALOR_MAX_ALZA = 0, 50
-VALOR_MIN_BAJA, VALOR_MAX_BAJA = -50, 0
+# Rango valido del valor de "verde" en el momento del cruce.
+#
+# Ajustado empiricamente con analisis_valor_verde.py sobre ~10 años de
+# historico de BTCUSDT 1h (todo el historico disponible en Binance),
+# agrupando todos los cruces por el valor de verde y midiendo el % de
+# aciertos y retorno medio a 24h. Sustituye la suposicion inicial (0-50
+# alza / -50-0 baja simetrico), que los datos no respaldaban:
+#
+#   - Alza: el rango 25-50 fue consistentemente el mejor en 3 muestras
+#     distintas (2, 6 y 10 años), con ~55-56% de aciertos sobre una
+#     muestra grande (n=1352 en la de 10 años) -> señal solida.
+#   - Baja: el patron resulto ser el opuesto al que se habia supuesto:
+#     cruces con verde <= -25 rindieron mejor (~63-68% de aciertos,
+#     consistente en las 3 muestras) que cruces cerca de 0, que rindieron
+#     peor que el azar (~40%). Por eso "baja" no tiene limite inferior.
+#
+# Nota: la muestra de "baja" (47 casos combinando <-50 y -50/-25 en la
+# medicion de 10 años) es bastante mas pequeña que la de "alza" (1352),
+# asi que esta señal tiene menos respaldo estadistico aunque el patron
+# sea consistente. Y como con cualquier analisis historico: rendimiento
+# pasado no garantiza nada hacia adelante.
+VALOR_MIN_ALZA, VALOR_MAX_ALZA = 25, 50
+VALOR_MAX_BAJA = -25  # sin limite inferior
 
 
 def revisar_intervalo(interval: str, state: dict) -> bool:
@@ -331,10 +351,12 @@ def revisar_intervalo(interval: str, state: dict) -> bool:
 
     if direccion == "alza":
         valor_ok = VALOR_MIN_ALZA <= verde_val <= VALOR_MAX_ALZA
+        rango_valor_txt = f"{VALOR_MIN_ALZA} a {VALOR_MAX_ALZA}"
         tsa_ok = tsa_bullish
         adx_ok = adx_val >= ADX_MEDIO and di_plus > di_minus
     else:
-        valor_ok = VALOR_MIN_BAJA <= verde_val <= VALOR_MAX_BAJA
+        valor_ok = verde_val <= VALOR_MAX_BAJA
+        rango_valor_txt = f"≤ {VALOR_MAX_BAJA}"
         tsa_ok = not tsa_bullish
         adx_ok = adx_val >= ADX_MEDIO and di_minus > di_plus
 
@@ -345,8 +367,7 @@ def revisar_intervalo(interval: str, state: dict) -> bool:
         return "✅" if ok else "❌"
 
     desglose = (
-        f"Valor verde: {verde_val:.1f} {_icono(valor_ok)} (rango {VALOR_MIN_ALZA if direccion == 'alza' else VALOR_MIN_BAJA}"
-        f" a {VALOR_MAX_ALZA if direccion == 'alza' else VALOR_MAX_BAJA})\n"
+        f"Valor verde: {verde_val:.1f} {_icono(valor_ok)} (rango {rango_valor_txt})\n"
         f"Trend Speed Analyzer: {'alcista' if tsa_bullish else 'bajista'} {_icono(tsa_ok)}\n"
         f"ADX: {adx_val:.1f} {_icono(adx_ok)} (≥{ADX_MEDIO:.0f} y DI dominante a favor)"
     )
