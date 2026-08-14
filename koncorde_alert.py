@@ -168,8 +168,8 @@ def detectar_cruce(df: pd.DataFrame) -> str | None:
 # Replica fiel del indicador "Trend Speed Analyzer (Zeiierman)" (codigo Pine
 # abierto, licencia CC BY-NC-SA 4.0), usado como confirmacion de tendencia:
 # verde/alcista cuando wma(close,2) > dyn_ema, rojo/bajista en caso contrario.
-TSA_MAX_LENGTH = 50        # 'Maximum Length' en el indicador original
-TSA_ACCEL_MULT = 5.0       # 'Accelerator Multiplier' en el indicador original
+TSA_MAX_LENGTH = 118        # 'Maximum Length' en el indicador original
+TSA_ACCEL_MULT = 2.8       # 'Accelerator Multiplier' en el indicador original
 
 
 def _wma(series: pd.Series, length: int) -> pd.Series:
