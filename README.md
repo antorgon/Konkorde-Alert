@@ -58,13 +58,38 @@ hasta **2 mensajes**, indicando siempre a que temporalidad corresponde
    - **0/3 o 1/3 → sin segundo mensaje** (solo queda el desglose del primero).
 
 Las 3 condiciones:
-- El valor de `verde` en el momento del cruce está entre **0 y 50** (alza)
-  o entre **-50 y 0** (baja — rango simétrico asumido, el criterio
-  original solo describe el caso alcista).
+- El valor de `verde` en el momento del cruce está entre **25 y 50** (alza)
+  o es **≤ -25, sin límite inferior** (baja). Ajustado con datos reales
+  (ver más abajo), no son suposiciones.
 - El **Trend Speed Analyzer (Zeiierman)** confirma la misma dirección
   (línea dinámica alcista para entradas, bajista para salidas).
 - El **ADX** (fuerza de tendencia, fórmula de Wilder) está por encima de
   20 y el DI dominante coincide con la dirección del cruce.
+
+## Cómo se ajustaron los rangos de valor
+
+El rango del filtro de `verde` empezó siendo una suposición (0-50 para alza,
+venía de una formación externa; -50/0 para baja, una extrapolación propia
+sin base real). Se validó con `analisis_valor_verde.py`, que descarga
+histórico real de BTCUSDT y mide, para cada cruce pasado, si el precio se
+movió a favor en las siguientes 24h, agrupado por rango de valor. Con casi
+todo el histórico disponible de Binance (~10 años, miles de cruces):
+
+- **Alza**: el rango 25-50 rindió consistentemente mejor (~55-56% de
+  aciertos) que 0-25 o >50 (~49-51%, indistinguible del azar), en 3
+  muestras de tamaño creciente (2, 6 y 10 años).
+- **Baja**: resultó ser justo lo contrario a lo asumido — cruces con
+  `verde <= -25` rindieron mejor (~63-68% de aciertos) que cruces cerca de
+  0, que rindieron peor que el azar (~40%). Por eso "baja" no tiene límite
+  inferior.
+
+La muestra de "baja" es bastante más pequeña que la de "alza" (decenas de
+casos frente a más de mil), así que esa señal tiene menos respaldo
+estadístico aunque el patrón fue consistente en las 3 mediciones. Y como
+con cualquier análisis histórico: rendimiento pasado no garantiza nada
+hacia adelante. Para relanzar el análisis (por ejemplo si quieres probar
+otro horizonte de medida, no solo 24h): **Actions -> Analisis Valor Verde
+-> Run workflow**.
 
 ## Puesta en marcha (una sola vez)
 
