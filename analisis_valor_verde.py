@@ -28,7 +28,7 @@ import numpy as np
 
 SYMBOL = "BTCUSDT"
 INTERVAL = "1h"
-YEARS_BACK = 5
+YEARS_BACK = 10
 HORIZONTE_VELAS = 24   # cuantas velas hacia adelante se mide el retorno (24 = 1 dia en 1h)
 WARMUP_CANDLES = 150   # velas iniciales descartadas (indicadores inestables)
 
