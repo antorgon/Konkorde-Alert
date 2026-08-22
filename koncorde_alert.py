@@ -371,7 +371,7 @@ def revisar_intervalo(interval: str, state: dict) -> bool:
         tsa_ok = not tsa_bullish
         adx_ok = adx_val >= ADX_MEDIO and di_minus > di_plus
 
-    valor_ok = valor_estado == "dentro"  # SOLO "dentro" cuenta para la confirmacion; "extendido" es informativo
+    valor_ok = valor_estado in ("dentro", "extendido")  # 🟢 y 🟡 cuentan; solo 🔴 (direccion contraria) no
     n_ok = sum([valor_ok, tsa_ok, adx_ok])
     sufijo = "up" if direccion == "alza" else "down"  # se usa en las 3 claves de estado de abajo
 
