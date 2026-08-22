@@ -168,8 +168,9 @@ def detectar_cruce(df: pd.DataFrame) -> str | None:
 # Replica fiel del indicador "Trend Speed Analyzer (Zeiierman)" (codigo Pine
 # abierto, licencia CC BY-NC-SA 4.0), usado como confirmacion de tendencia:
 # verde/alcista cuando wma(close,2) > dyn_ema, rojo/bajista en caso contrario.
-TSA_MAX_LENGTH = 118        # 'Maximum Length' en el indicador original
-TSA_ACCEL_MULT = 2.8       # 'Accelerator Multiplier' en el indicador original
+TSA_MAX_LENGTH = 118       # 'Maximum Length' -- ajustado a la config real del indicador
+                           # en el grafico del usuario (no es el valor por defecto, que es 50)
+TSA_ACCEL_MULT = 2.8       # 'Accelerator Multiplier' -- idem, valor por defecto es 5.0
 
 
 def _wma(series: pd.Series, length: int) -> pd.Series:
@@ -350,24 +351,42 @@ def revisar_intervalo(interval: str, state: dict) -> bool:
     di_plus, di_minus = last_closed["di_plus"], last_closed["di_minus"]
 
     if direccion == "alza":
-        valor_ok = VALOR_MIN_ALZA <= verde_val <= VALOR_MAX_ALZA
         rango_valor_txt = f"{VALOR_MIN_ALZA} a {VALOR_MAX_ALZA}"
+        if VALOR_MIN_ALZA <= verde_val <= VALOR_MAX_ALZA:
+            valor_estado = "dentro"
+        elif verde_val > VALOR_MAX_ALZA:
+            valor_estado = "extendido"   # "en pleno proceso": misma direccion, fuera del rango validado
+        else:
+            valor_estado = "contrario"   # por debajo del rango, ni siquiera en la misma direccion
         tsa_ok = tsa_bullish
         adx_ok = adx_val >= ADX_MEDIO and di_plus > di_minus
     else:
-        valor_ok = verde_val <= VALOR_MAX_BAJA
         rango_valor_txt = f"≤ {VALOR_MAX_BAJA}"
+        if verde_val <= VALOR_MAX_BAJA:
+            valor_estado = "dentro"
+        elif verde_val <= 0:
+            valor_estado = "extendido"   # "en pleno proceso" en el lado bajista: negativo pero no tanto
+        else:
+            valor_estado = "contrario"   # positivo en un cruce bajista, direccion contraria
         tsa_ok = not tsa_bullish
         adx_ok = adx_val >= ADX_MEDIO and di_minus > di_plus
 
+    valor_ok = valor_estado == "dentro"  # SOLO "dentro" cuenta para la confirmacion; "extendido" es informativo
     n_ok = sum([valor_ok, tsa_ok, adx_ok])
     sufijo = "up" if direccion == "alza" else "down"  # se usa en las 3 claves de estado de abajo
 
     def _icono(ok):
         return "✅" if ok else "❌"
 
+    ICONO_VALOR = {"dentro": "🟢", "extendido": "🟡", "contrario": "🔴"}
+    TEXTO_VALOR = {
+        "dentro": "dentro del rango validado",
+        "extendido": "fuera de rango, en pleno proceso (sin ventaja estadistica demostrada)",
+        "contrario": "direccion contraria al cruce",
+    }
     desglose = (
-        f"Valor verde: {verde_val:.1f} {_icono(valor_ok)} (rango {rango_valor_txt})\n"
+        f"Valor verde: {verde_val:.1f} {ICONO_VALOR[valor_estado]} "
+        f"({TEXTO_VALOR[valor_estado]}, rango validado {rango_valor_txt})\n"
         f"Trend Speed Analyzer: {'alcista' if tsa_bullish else 'bajista'} {_icono(tsa_ok)}\n"
         f"ADX: {adx_val:.1f} {_icono(adx_ok)} (≥{ADX_MEDIO:.0f} y DI dominante a favor)"
     )
@@ -406,7 +425,12 @@ def revisar_intervalo(interval: str, state: dict) -> bool:
     elif n_ok == 2:
         state_key_partial = f"last_partial_{sufijo}_close_time_{interval}"
         if state.get(state_key_partial) != close_time_str:
-            fallo = "valor" if not valor_ok else ("Trend Speed Analyzer" if not tsa_ok else "ADX")
+            if not valor_ok:
+                fallo = "valor (" + TEXTO_VALOR[valor_estado] + ")"
+            elif not tsa_ok:
+                fallo = "Trend Speed Analyzer"
+            else:
+                fallo = "ADX"
             msg_partial = (
                 f"Koncorde {SYMBOL} {interval}\n"
                 f"{PARTIAL_DESC[direccion]}\n"
