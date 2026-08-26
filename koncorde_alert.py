@@ -290,12 +290,50 @@ def compute_ao(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def compute_bbwp(df: pd.DataFrame, length: int = 13, lookback: int = 252) -> pd.DataFrame:
+    """BBWP: percentil (0-100) de la anchura de las Bandas de Bollinger
+    frente a su propio historial. Puramente informativo -- en el panel
+    original tampoco participa en la logica COMPRAR/VENDER/ESPERAR (solo se
+    muestra como contexto de volatilidad), asi que aqui se calcula pero no
+    condiciona el veredicto."""
+    df = df.copy()
+    basis = df["close"].rolling(length).mean()
+    dev = df["close"].rolling(length).std(ddof=0)
+    width = 2 * dev / basis
+
+    def _pct_rank(x):
+        last = x[-1]
+        if np.isnan(last):
+            return np.nan
+        valid = x[~np.isnan(x)]
+        if valid.size == 0:
+            return np.nan
+        return (valid <= last).mean() * 100
+
+    df["bbwp"] = width.rolling(lookback, min_periods=5).apply(_pct_rank, raw=True)
+    return df
+
+
+def bbwp_texto(bbwp_val: float) -> str:
+    if pd.isna(bbwp_val):
+        return "BBWP: sin datos suficientes todavia"
+    if bbwp_val < 25:
+        return f"BBWP: {bbwp_val:.0f}% (compresion -- movimiento con poco recorrido de volatilidad detras)"
+    elif bbwp_val < 75:
+        return f"BBWP: {bbwp_val:.0f}% (volatilidad normal)"
+    elif bbwp_val < 98:
+        return f"BBWP: {bbwp_val:.0f}% (volatilidad ya alta antes de la señal -- posible entrada tardia)"
+    else:
+        return f"BBWP: {bbwp_val:.0f}% (volatilidad extrema -- alto riesgo de entrada muy tardia)"
+
+
 def compute_veredicto(df: pd.DataFrame) -> pd.DataFrame:
     """Requiere que el df ya tenga 'verde', 'marron' (de compute_koncorde) y
     'adx' (de compute_adx) calculados. Añade 'kon_val' (criterio Bitman:
-    el mayor entre verde/marron, o el mas negativo si ambos son negativos)
-    y 'veredicto' (COMPRAR / VENDER / ESPERAR)."""
+    el mayor entre verde/marron, o el mas negativo si ambos son negativos),
+    'bbwp' (informativo, no cuenta) y 'veredicto' (COMPRAR / VENDER / ESPERAR)."""
     df = compute_ao(df)
+    df = compute_bbwp(df)
     mx = df[["verde", "marron"]].max(axis=1)
     mn = df[["verde", "marron"]].min(axis=1)
     df["kon_val"] = np.where(mx < 0, mn, mx)
@@ -359,12 +397,13 @@ def revisar_veredicto(df: pd.DataFrame, interval: str, state: dict) -> bool:
         motivo = motivo_espera(fila)
 
     msg = (
-        f"Veredicto {SYMBOL} {interval}\n"
+        f"Bitman {SYMBOL} {interval}\n"
         f"{veredicto_previo} -> {veredicto_actual}\n"
         f"{motivo}\n"
         f"AO: {last_closed['ao']:.1f} ({last_closed['ao_estado']})\n"
         f"Koncorde (todo el valor): {last_closed['kon_val']:.1f}\n"
         f"ADX: {last_closed['adx']:.1f}\n"
+        f"{bbwp_texto(last_closed['bbwp'])}\n"
         f"Vela cerrada: {close_time_str}\n"
         f"Precio cierre: {last_closed['close']:.2f}"
     )
