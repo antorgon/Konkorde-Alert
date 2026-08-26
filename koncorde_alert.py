@@ -261,6 +261,119 @@ def compute_adx(df: pd.DataFrame, di_length: int = ADX_DI_LENGTH,
     return df
 
 
+# --------------------------- SISTEMA 2: VEREDICTO (COMPRAR/VENDER/ESPERAR) ---------------------------
+# Segunda via de aviso, INDEPENDIENTE del sistema de cruces de mas arriba.
+# Replica el panel de trading compartido por el usuario (AO + ADX + Koncorde
+# "todo el valor", criterio Bitman). A diferencia del sistema de cruces (que
+# se dispara en el INSTANTE del cruce verde/media), este sistema evalua un
+# ESTADO en cada vela y avisa solo cuando ese estado CAMBIA (de ESPERAR/VENDER
+# a COMPRAR, o de COMPRAR a VENDER/ESPERAR) -- no en cada vela que se
+# mantiene igual.
+#
+# Nota: aqui se implementa la version "Base" del panel (sin el filtro
+# solo-largo ni el filtro de temporalidad superior de la version "Pro", ni
+# el modelo de asignacion de capital) para mantener el alcance similar al
+# resto del sistema, que ya revisa 1h/4h/1d de forma independiente.
+
+
+def compute_ao(df: pd.DataFrame) -> pd.DataFrame:
+    """Awesome Oscillator (5/34) y su estado de 4 valores."""
+    df = df.copy()
+    median = (df["high"] + df["low"]) / 2
+    ao = median.rolling(5).mean() - median.rolling(34).mean()
+    subiendo = ao > ao.shift(1)
+    es_positivo = ao >= 0
+    condiciones = [es_positivo & subiendo, es_positivo & ~subiendo, (~es_positivo) & (~subiendo), (~es_positivo) & subiendo]
+    opciones = ["alcista", "retroceso_alcista", "bajista", "retroceso_bajista"]
+    df["ao"] = ao
+    df["ao_estado"] = np.select(condiciones, opciones, default=None)
+    return df
+
+
+def compute_veredicto(df: pd.DataFrame) -> pd.DataFrame:
+    """Requiere que el df ya tenga 'verde', 'marron' (de compute_koncorde) y
+    'adx' (de compute_adx) calculados. Añade 'kon_val' (criterio Bitman:
+    el mayor entre verde/marron, o el mas negativo si ambos son negativos)
+    y 'veredicto' (COMPRAR / VENDER / ESPERAR)."""
+    df = compute_ao(df)
+    mx = df[["verde", "marron"]].max(axis=1)
+    mn = df[["verde", "marron"]].min(axis=1)
+    df["kon_val"] = np.where(mx < 0, mn, mx)
+
+    adx_subiendo = df["adx"] > df["adx"].shift(1)
+    ko_bull = df["kon_val"] > 0
+    ko_bear = df["kon_val"] < 0
+
+    es_compra = (df["ao_estado"] == "alcista") & adx_subiendo & ko_bull
+    es_venta = (df["ao_estado"] == "bajista") & adx_subiendo & ko_bear
+    df["veredicto"] = np.select([es_compra, es_venta], ["COMPRAR", "VENDER"], default="ESPERAR")
+    return df
+
+
+def motivo_espera(row) -> str:
+    """Motivo granular de por que el veredicto es ESPERAR (replica
+    baseVerdictAt del panel original)."""
+    adx_subiendo = row.get("_adx_subiendo", False)
+    if not adx_subiendo:
+        return "Sin impulso: el ADX no esta subiendo"
+    if row["ao_estado"] in ("retroceso_alcista", "retroceso_bajista"):
+        return "En retroceso: esperando reanudacion de la tendencia"
+    if row["ao_estado"] == "alcista" and not row["kon_val"] > 0:
+        return "AO alcista pero Koncorde aun no confirma"
+    if row["ao_estado"] == "bajista" and not row["kon_val"] < 0:
+        return "AO bajista pero Koncorde aun no confirma"
+    return "Señales sin alineacion clara"
+
+
+def revisar_veredicto(df: pd.DataFrame, interval: str, state: dict) -> bool:
+    """Revisa el sistema de veredicto (2ª via, independiente del cruce) para
+    una temporalidad. 'df' debe traer ya calculados verde/marron/adx (via
+    compute_koncorde + compute_adx) -- se le añade aqui compute_veredicto.
+    Avisa solo si el veredicto cambia respecto al de la vela anterior.
+    Devuelve True si el estado cambio."""
+    df = compute_veredicto(df)
+
+    last_closed = df.iloc[-2]
+    prev_closed = df.iloc[-3]
+    close_time_str = last_closed["close_time"].isoformat()
+
+    veredicto_actual = last_closed["veredicto"]
+    veredicto_previo = prev_closed["veredicto"]
+
+    state_key = f"last_veredicto_{interval}"
+    if veredicto_actual == veredicto_previo:
+        print(f"[{interval}][veredicto] Sin cambio: sigue en {veredicto_actual}. Vela cerrada: {close_time_str}")
+        return False
+
+    if state.get(state_key) == close_time_str:
+        print(f"[{interval}][veredicto] Cambio ya avisado. Vela cerrada: {close_time_str}")
+        return False
+
+    if veredicto_actual == "COMPRAR":
+        motivo = "AO alcista + ADX con impulso + Koncorde confirma acumulacion"
+    elif veredicto_actual == "VENDER":
+        motivo = "AO bajista + ADX con impulso + Koncorde confirma distribucion"
+    else:
+        fila = dict(last_closed)
+        fila["_adx_subiendo"] = last_closed["adx"] > prev_closed["adx"]
+        motivo = motivo_espera(fila)
+
+    msg = (
+        f"Veredicto {SYMBOL} {interval}\n"
+        f"{veredicto_previo} -> {veredicto_actual}\n"
+        f"{motivo}\n"
+        f"AO: {last_closed['ao']:.1f} ({last_closed['ao_estado']})\n"
+        f"Koncorde (todo el valor): {last_closed['kon_val']:.1f}\n"
+        f"ADX: {last_closed['adx']:.1f}\n"
+        f"Vela cerrada: {close_time_str}\n"
+        f"Precio cierre: {last_closed['close']:.2f}"
+    )
+    print(msg)
+    send_telegram(msg)
+    state[state_key] = close_time_str
+    return True
+
+
 # --------------------------- ESTADO (anti-duplicados) ---------------------------
 def load_state() -> dict:
     if os.path.exists(STATE_FILE):
@@ -327,12 +440,11 @@ VALOR_MIN_ALZA, VALOR_MAX_ALZA = 25, 50
 VALOR_MAX_BAJA = -25  # sin limite inferior
 
 
-def revisar_intervalo(interval: str, state: dict) -> bool:
-    """Revisa una temporalidad y actualiza 'state' in-place.
+def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict) -> bool:
+    """Revisa una temporalidad y actualiza 'state' in-place. 'df' debe traer
+    ya calculados verde/marron/media (compute_koncorde), tsa_bullish
+    (compute_trend_speed) y adx/di_plus/di_minus (compute_adx).
     Devuelve True si el estado cambio (para saber si hay que guardar)."""
-    df = compute_koncorde(get_klines(interval=interval))
-    df = compute_trend_speed(df)
-    df = compute_adx(df)
     last_closed = df.iloc[-2]
     close_time_str = last_closed["close_time"].isoformat()
 
@@ -457,12 +569,31 @@ def main():
 
     for interval in INTERVALS:
         try:
-            if revisar_intervalo(interval, state):
+            # Una sola descarga y un solo calculo de indicadores por
+            # temporalidad, reutilizados por los 2 sistemas de aviso (antes
+            # cada uno descargaba y calculaba por su cuenta, duplicando
+            # peticiones a Binance y calculo de Koncorde/ADX).
+            df = get_klines(interval=interval)
+            df = compute_koncorde(df)
+            df = compute_trend_speed(df)
+            df = compute_adx(df)
+        except Exception as e:
+            print(f"[{interval}] [ERROR] {e}")
+            continue
+
+        try:
+            if revisar_intervalo(df, interval, state):
                 state_changed = True
         except Exception as e:
             # Si falla una temporalidad (ej. un fallo puntual de red), las
             # demas se siguen revisando igualmente.
             print(f"[{interval}] [ERROR] {e}")
+
+        try:
+            if revisar_veredicto(df, interval, state):
+                state_changed = True
+        except Exception as e:
+            print(f"[{interval}][veredicto] [ERROR] {e}")
 
     if state_changed:
         save_state(state)
