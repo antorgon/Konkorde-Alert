@@ -47,7 +47,7 @@ Por cada cruce detectado (en cualquiera de las 3 temporalidades) se envían
 hasta **2 mensajes**, indicando siempre a que temporalidad corresponde
 (ej. "Koncorde BTCUSDT 4h"):
 
-1. **Aviso del cruce** (siempre que hay cruce), con el desglose ✅/❌ de las
+1. **Aviso del cruce** (siempre que hay cruce), con el desglose de las
    3 condiciones en ese mismo mensaje:
    - *Verde entra en la montaña* — cruce al alza de verde sobre media.
    - *Verde sale de la montaña* — cruce a la baja de verde bajo media.
@@ -58,9 +58,12 @@ hasta **2 mensajes**, indicando siempre a que temporalidad corresponde
    - **0/3 o 1/3 → sin segundo mensaje** (solo queda el desglose del primero).
 
 Las 3 condiciones:
-- El valor de `verde` en el momento del cruce está entre **25 y 50** (alza)
-  o es **≤ -25, sin límite inferior** (baja). Ajustado con datos reales
-  (ver más abajo), no son suposiciones.
+- El valor de `verde` en el momento del cruce tiene 3 estados posibles:
+  🟢 **dentro** del rango validado (25-50 alza / ≤-25 baja, cuenta como
+  cumplida), 🟡 **extendido** (fuera del rango pero en la misma dirección —
+  sin ventaja estadística demostrada, pero también cuenta como cumplida,
+  por decisión explícita de aceptar el riesgo de esa falta de evidencia),
+  o 🔴 **dirección contraria** al cruce (no cuenta).
 - El **Trend Speed Analyzer (Zeiierman)** confirma la misma dirección
   (línea dinámica alcista para entradas, bajista para salidas).
 - El **ADX** (fuerza de tendencia, fórmula de Wilder) está por encima de
@@ -127,6 +130,39 @@ Entra en la pestaña Actions:
   ciclo") o simplemente vuelve a darle a "Run workflow" para reiniciar la
   cadena manualmente.
 
+## Sistema 2: Bitman (COMPRAR / VENDER / ESPERAR)
+
+Además de las alertas de cruce, hay un **segundo sistema de avisos totalmente
+independiente** (los mensajes de Telegram empiezan por "Bitman"), basado en
+un panel de trading que se compartió como referencia. A diferencia del
+sistema de cruces (que avisa en el instante exacto en que `verde` cruza
+`media`), este evalúa un **estado** en cada vela y solo avisa cuando ese
+estado **cambia**. Sigue el criterio de 3 pasos descrito para leer las
+señales de ese panel -- tendencia, impulso, confirmación:
+
+- **COMPRAR**: **tendencia** alcista (AO, Awesome Oscillator 5/34) +
+  **impulso** (ADX subiendo) + **confirmación** (Koncorde "todo el valor",
+  criterio Bitman: el mayor entre `verde`/`marron`, o el más negativo si
+  ambos lo son) en positivo.
+- **VENDER**: lo mismo pero en negativo.
+- **ESPERAR**: cualquier otro caso, con un motivo explicado (sin impulso del
+  ADX, en retroceso del AO, Koncorde sin confirmar, etc.).
+
+El **BBWP** (volatilidad, 4º punto de ese criterio) es informativo en el
+panel original y no participa en la lógica COMPRAR/VENDER/ESPERAR -- por
+eso aquí tampoco se usa como condición que bloquea o cuenta, pero sí se
+incluye como **línea informativa** en cada mensaje de Bitman (percentil de
+anchura de Bandas de Bollinger: bajo = compresión/posible movimiento con
+poco recorrido detrás, alto = volatilidad ya elevada/posible señal tardía).
+
+Corre en las mismas 3 temporalidades (1h/4h/1d), con su propio control
+anti-duplicados en `state.json` (clave `last_veredicto_{temporalidad}`).
+
+Es la versión "Base" de ese panel — no incluye el filtro solo-largo, el
+filtro de temporalidad superior encadenado (1h exige 4h y 1d alcistas a la
+vez) ni el modelo de asignación de capital de la versión "Pro" del panel
+original, para mantener el alcance similar al resto del sistema.
+
 ## Cambiar de par o de temporalidades
 
 Edita en `koncorde_alert.py`:
@@ -151,6 +187,7 @@ Y en `.github/workflows/koncorde.yml`, la línea `sleep 1800` (segundos =
 - El Trend Speed Analyzer y el ADX sí son réplicas exactas de sus fórmulas
   originales (Trend Speed Analyzer: Zeiierman, CC BY-NC-SA 4.0; ADX: fórmula
   estándar de Wilder / `ta.dmi` de Pine), no aproximaciones.
-- Las 3 peticiones a Binance de cada pasada (una por temporalidad) reutilizan
-  la misma conexión HTTPS (`requests.Session`), en vez de abrir una nueva
-  por cada una.
+- Las 3 peticiones a Binance de cada pasada (una por temporalidad, compartida
+  entre los 2 sistemas de aviso -- antes cada sistema descargaba y calculaba
+  por su cuenta, el doble de peticiones) reutilizan la misma conexión HTTPS
+  (`requests.Session`).
