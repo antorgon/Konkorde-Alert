@@ -34,7 +34,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Bucle de chequeos cada 30 min durante ~5h40m
+      - name: Bucle de chequeos cada 15 min durante ~5h40m
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -53,7 +53,7 @@ jobs:
               git push || echo "push fallido, se sigue con el bucle igualmente"
             fi
 
-            sleep 1800   # 30 minutos
+            sleep 900   # 15 minutos
           done
 
       - name: Relanzar el siguiente ciclo (auto-perpetuacion)
