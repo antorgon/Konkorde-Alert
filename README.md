@@ -169,8 +169,10 @@ El **BBWP** (volatilidad, 4º punto de ese criterio) es informativo en el
 panel original y no participa en la lógica COMPRAR/VENDER/ESPERAR -- por
 eso aquí tampoco se usa como condición que bloquea o cuenta, pero sí se
 incluye como **línea informativa** en cada mensaje de Bitman (percentil de
-anchura de Bandas de Bollinger): **<25%** compresión, **25-75%** normal,
-**75-98%** volatilidad alta (posible entrada tardía), **≥98%** extrema.
+anchura de Bandas de Bollinger, clasificación idéntica a la del panel
+original, 5 niveles): **≤2%** extremo bajo, **<25%** baja/compresión,
+**<75%** media/normal, **<98%** alta (posible entrada tardía), **≥98%**
+extremo alto.
 
 Igual que en el sistema de cruces, cada mensaje termina con un resumen del
 veredicto actual de las otras 2 temporalidades (🟢 COMPRAR / 🔴 VENDER /
