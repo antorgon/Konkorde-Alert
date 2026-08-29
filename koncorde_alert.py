@@ -335,16 +335,21 @@ def compute_bbwp(df: pd.DataFrame, length: int = 13, lookback: int = 252) -> pd.
 
 
 def bbwp_texto(bbwp_val: float) -> str:
+    """Clasificacion identica a la del panel original (5 niveles, no una
+    simplificacion): <=2 Extremo bajo, <25 Baja, <75 Media, <98 Alta,
+    resto Extremo alto."""
     if pd.isna(bbwp_val):
         return "BBWP: sin datos suficientes todavia"
-    if bbwp_val < 25:
-        return f"BBWP: {bbwp_val:.0f}% (compresion -- movimiento con poco recorrido de volatilidad detras)"
+    if bbwp_val <= 2:
+        return f"BBWP: {bbwp_val:.0f}% (extremo bajo -- compresion muy fuerte, expansion probablemente inminente)"
+    elif bbwp_val < 25:
+        return f"BBWP: {bbwp_val:.0f}% (baja -- compresion, posible expansion proxima)"
     elif bbwp_val < 75:
-        return f"BBWP: {bbwp_val:.0f}% (volatilidad normal)"
+        return f"BBWP: {bbwp_val:.0f}% (media -- volatilidad normal)"
     elif bbwp_val < 98:
-        return f"BBWP: {bbwp_val:.0f}% (volatilidad ya alta antes de la señal -- posible entrada tardia)"
+        return f"BBWP: {bbwp_val:.0f}% (alta -- volatilidad ya elevada antes de la señal, posible entrada tardia)"
     else:
-        return f"BBWP: {bbwp_val:.0f}% (volatilidad extrema -- alto riesgo de entrada muy tardia)"
+        return f"BBWP: {bbwp_val:.0f}% (extremo alto -- volatilidad extrema, alto riesgo de entrada muy tardia)"
 
 
 def compute_veredicto(df: pd.DataFrame) -> pd.DataFrame:
