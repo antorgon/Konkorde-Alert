@@ -1,6 +1,6 @@
 # Koncorde Alert (GitHub Actions, auto-perpetuo)
 
-Revisa el Koncorde de BTCUSDT en 3 temporalidades (1h, 4h y 1d) cada 30
+Revisa el Koncorde de BTCUSDT en 3 temporalidades (1h, 4h y 1d) cada 10
 minutos y te avisa por Telegram.
 Corre gratis en los servidores de GitHub, indefinidamente, sin que tengas
 que tener tu ordenador encendido ni depender de ningún servicio externo.
@@ -14,7 +14,7 @@ bajo trafico, no de esta configuración). La solución fue un **workflow
 auto-perpetuo**:
 
 - Se arranca una vez (a mano, con "Run workflow").
-- Dentro, un bucle comprueba el Koncorde cada 30 minutos durante ~5h40m (el
+- Dentro, un bucle comprueba el Koncorde cada 10 minutos durante ~5h40m (el
   máximo que permite una sola ejecución de GitHub Actions son 6h).
 - Justo antes de acabar, el propio workflow se vuelve a lanzar a sí mismo
   vía la API de GitHub (usando el token que GitHub ya proporciona
@@ -41,11 +41,28 @@ lista al principio de `koncorde_alert.py`:
 INTERVALS = ["1h", "4h", "1d"]
 ```
 
+**Sobre la frecuencia de chequeo (10 min)**: como la vela más corta es de
+1h, revisar cada 10 min ya garantiza detectar el cierre de cada vela de las
+3 temporalidades bastante antes de que llegue la siguiente -- en teoría no
+debería perderse ningún cambio real por frecuencia. La única forma real de
+perderse algo es que el propio workflow tenga algún hueco de inactividad
+(fallo puntual, cancelación) más largo que el periodo de una vela; en ese
+caso, cualquier cambio de estado que fuera y volviera dentro de ese hueco
+sería invisible (solo se compara la última vela cerrada contra la
+anterior, no el histórico completo). Un intervalo más corto reduce ese
+riesgo marginalmente, pero la protección real viene de que el workflow no
+tenga huecos (ver más arriba el sistema auto-perpetuo + red de seguridad).
+
 ## Qué avisos manda
 
 Por cada cruce detectado (en cualquiera de las 3 temporalidades) se envían
 hasta **2 mensajes**, indicando siempre a que temporalidad corresponde
-(ej. "Koncorde BTCUSDT 4h"):
+(ej. "Koncorde BTCUSDT 4h"). Cada mensaje termina con un resumen del
+estado actual de las **otras 2 temporalidades** (posición y nº de
+condiciones cumplidas ahora mismo, aunque no tengan cruce), para tener
+contexto completo sin tener que juntar varios mensajes. "Alcista"/"bajista"
+llevan 🟢/🔴 delante -- Telegram no admite texto de color real en mensajes
+de bot, es el sustituto habitual.
 
 1. **Aviso del cruce** (siempre que hay cruce), con el desglose de las
    3 condiciones en ese mismo mensaje:
@@ -152,8 +169,12 @@ El **BBWP** (volatilidad, 4º punto de ese criterio) es informativo en el
 panel original y no participa en la lógica COMPRAR/VENDER/ESPERAR -- por
 eso aquí tampoco se usa como condición que bloquea o cuenta, pero sí se
 incluye como **línea informativa** en cada mensaje de Bitman (percentil de
-anchura de Bandas de Bollinger: bajo = compresión/posible movimiento con
-poco recorrido detrás, alto = volatilidad ya elevada/posible señal tardía).
+anchura de Bandas de Bollinger): **<25%** compresión, **25-75%** normal,
+**75-98%** volatilidad alta (posible entrada tardía), **≥98%** extrema.
+
+Igual que en el sistema de cruces, cada mensaje termina con un resumen del
+veredicto actual de las otras 2 temporalidades (🟢 COMPRAR / 🔴 VENDER /
+⚪ ESPERAR).
 
 Corre en las mismas 3 temporalidades (1h/4h/1d), con su propio control
 anti-duplicados en `state.json` (clave `last_veredicto_{temporalidad}`).
@@ -170,8 +191,8 @@ Edita en `koncorde_alert.py`:
 SYMBOL = "BTCUSDT"
 INTERVALS = ["1h", "4h", "1d"]
 ```
-Y en `.github/workflows/koncorde.yml`, la línea `sleep 1800` (segundos =
-30 min) dentro del bucle, si quieres otra frecuencia de chequeo.
+Y en `.github/workflows/koncorde.yml`, la línea `sleep 600` (segundos =
+10 min) dentro del bucle, si quieres otra frecuencia de chequeo.
 
 ## Notas
 
