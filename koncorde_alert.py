@@ -1,18 +1,18 @@
 """
 Alerta Koncorde -> Telegram
 ============================
-Se ejecuta repetidamente (cada 30 min) dentro del bucle del workflow de
+Se ejecuta repetidamente (cada 10 min) dentro del bucle del workflow de
 GitHub Actions (.github/workflows/koncorde.yml), que se auto-relanza cada
 ~5h40m para funcionar de forma indefinida. Cada ejecucion de este script:
 
-  1. Descarga velas de Binance
+  1. Descarga velas de Binance para 1h, 4h y 1d
   2. Calcula el Koncorde (verde, marron, azul, media), el Trend Speed
-     Analyzer (dyn_ema, tsa_bullish) y el ADX (fuerza de tendencia)
-  3. Mira si en la ultima vela CERRADA "verde" cruzo la "media"
-  4. Manda por Telegram el aviso del cruce (siempre) y, si ademas se cumplen
-     el rango de valor, la confirmacion del Trend Speed Analyzer y el ADX
-     indicando tendencia con fuerza suficiente, un segundo aviso de
-     "entrada/salida CONFIRMADA"
+     Analyzer (dyn_ema, tsa_bullish), el ADX (fuerza de tendencia), el AO,
+     el BBWP y el veredicto Bitman para cada temporalidad
+  3. Mira si en la ultima vela CERRADA "verde" cruzo la "media" (sistema 1)
+     y si el veredicto Bitman cambio respecto a la vela anterior (sistema 2)
+  4. Manda por Telegram el aviso correspondiente, incluyendo al final un
+     resumen del estado de las otras 2 temporalidades
   5. Guarda en state.json la ultima vela avisada de cada tipo, para no
      duplicar alertas entre ejecuciones
 
@@ -32,6 +32,9 @@ Los rangos de valor de "verde" (VALOR_MIN_ALZA/VALOR_MAX_ALZA/VALOR_MAX_BAJA
 mas abajo) estan ajustados con datos reales, no con suposiciones: ver
 analisis_valor_verde.py para el analisis completo sobre ~10 años de
 historico de BTCUSDT.
+
+Nota sobre color: Telegram no permite texto de color en sus mensajes de
+bot, asi que "alcista"/"bajista" se marcan con 🟢/🔴 como sustituto.
 """
 
 import os
@@ -46,6 +49,17 @@ SYMBOL = "BTCUSDT"
 INTERVAL = "1h"
 LOOKBACK = 400
 STATE_FILE = "state.json"
+
+
+def _col(texto: str) -> str:
+    """Antepone 🟢/🔴 a 'alcista'/'bajista' (Telegram no soporta color de
+    texto real en sus mensajes, esto es el sustituto habitual)."""
+    if "alcista" in texto:
+        return f"🟢 {texto}"
+    if "bajista" in texto:
+        return f"🔴 {texto}"
+    return texto
+
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
@@ -283,7 +297,13 @@ def compute_ao(df: pd.DataFrame) -> pd.DataFrame:
     ao = median.rolling(5).mean() - median.rolling(34).mean()
     subiendo = ao > ao.shift(1)
     es_positivo = ao >= 0
-    condiciones = [es_positivo & subiendo, es_positivo & ~subiendo, (~es_positivo) & (~subiendo), (~es_positivo) & subiendo]
+    hay_dato = ao.notna() & ao.shift(1).notna()  # evita clasificar NaN como "bajista" por False==False
+    condiciones = [
+        hay_dato & es_positivo & subiendo,
+        hay_dato & es_positivo & ~subiendo,
+        hay_dato & (~es_positivo) & (~subiendo),
+        hay_dato & (~es_positivo) & subiendo,
+    ]
     opciones = ["alcista", "retroceso_alcista", "bajista", "retroceso_bajista"]
     df["ao"] = ao
     df["ao_estado"] = np.select(condiciones, opciones, default=None)
@@ -363,16 +383,25 @@ def motivo_espera(row) -> str:
     return "Señales sin alineacion clara"
 
 
-def revisar_veredicto(df: pd.DataFrame, interval: str, state: dict) -> bool:
-    """Revisa el sistema de veredicto (2ª via, independiente del cruce) para
-    una temporalidad. 'df' debe traer ya calculados verde/marron/adx (via
-    compute_koncorde + compute_adx) -- se le añade aqui compute_veredicto.
-    Avisa solo si el veredicto cambia respecto al de la vela anterior.
-    Devuelve True si el estado cambio."""
-    df = compute_veredicto(df)
+def resumen_otras_temporalidades_bitman(otros_ver: dict) -> str:
+    """Linea por cada otra temporalidad con su veredicto actual (COMPRAR
+    en verde, VENDER en rojo, ESPERAR sin colorear)."""
+    lineas = []
+    for iv, odf_ver in otros_ver.items():
+        v = odf_ver.iloc[-2]["veredicto"]
+        icono = "🟢" if v == "COMPRAR" else "🔴" if v == "VENDER" else "⚪"
+        lineas.append(f"{iv}: {icono} {v}")
+    return "Otras temporalidades:\n" + "\n".join(lineas) if lineas else ""
 
-    last_closed = df.iloc[-2]
-    prev_closed = df.iloc[-3]
+
+def revisar_veredicto(df_ver: pd.DataFrame, interval: str, state: dict, otros_ver: dict) -> bool:
+    """Revisa el sistema de veredicto (2ª via, independiente del cruce) para
+    una temporalidad. 'df_ver' debe venir YA con compute_veredicto aplicado
+    (se calcula una vez en main() y se reutiliza aqui y para el resumen de
+    otras temporalidades). Avisa solo si el veredicto cambia respecto al de
+    la vela anterior. Devuelve True si el estado cambio."""
+    last_closed = df_ver.iloc[-2]
+    prev_closed = df_ver.iloc[-3]
     close_time_str = last_closed["close_time"].isoformat()
 
     veredicto_actual = last_closed["veredicto"]
@@ -388,24 +417,26 @@ def revisar_veredicto(df: pd.DataFrame, interval: str, state: dict) -> bool:
         return False
 
     if veredicto_actual == "COMPRAR":
-        motivo = "AO alcista + ADX con impulso + Koncorde confirma acumulacion"
+        motivo = _col("AO alcista") + " + ADX con impulso + Koncorde confirma acumulacion"
     elif veredicto_actual == "VENDER":
-        motivo = "AO bajista + ADX con impulso + Koncorde confirma distribucion"
+        motivo = _col("AO bajista") + " + ADX con impulso + Koncorde confirma distribucion"
     else:
         fila = dict(last_closed)
         fila["_adx_subiendo"] = last_closed["adx"] > prev_closed["adx"]
-        motivo = motivo_espera(fila)
+        motivo = _col(motivo_espera(fila))
+
+    resumen_otras = resumen_otras_temporalidades_bitman(otros_ver)
 
     msg = (
         f"Bitman {SYMBOL} {interval}\n"
         f"{veredicto_previo} -> {veredicto_actual}\n"
         f"{motivo}\n"
-        f"AO: {last_closed['ao']:.1f} ({last_closed['ao_estado']})\n"
+        f"AO: {last_closed['ao']:.1f} ({_col(last_closed['ao_estado'])})\n"
         f"Koncorde (todo el valor): {last_closed['kon_val']:.1f}\n"
         f"ADX: {last_closed['adx']:.1f}\n"
         f"{bbwp_texto(last_closed['bbwp'])}\n"
-        f"Vela cerrada: {close_time_str}\n"
         f"Precio cierre: {last_closed['close']:.2f}"
+        + (f"\n\n{resumen_otras}" if resumen_otras else "")
     )
     print(msg)
     send_telegram(msg)
@@ -479,10 +510,75 @@ VALOR_MIN_ALZA, VALOR_MAX_ALZA = 25, 50
 VALOR_MAX_BAJA = -25  # sin limite inferior
 
 
-def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict) -> bool:
+ICONO_VALOR = {"dentro": "🟢", "extendido": "🟡", "contrario": "🔴"}
+TEXTO_VALOR = {
+    "dentro": "dentro del rango validado",
+    "extendido": "fuera de rango, en pleno proceso (sin ventaja estadistica demostrada)",
+    "contrario": "direccion contraria al cruce",
+}
+
+
+def evaluar_condiciones_koncorde(last_closed, direccion: str) -> dict:
+    """Evalua las 3 condiciones del sistema de cruces para una vela y una
+    direccion dadas (la direccion puede venir de un cruce real, o -- para
+    el resumen de 'otras temporalidades' -- simplemente de si verde esta
+    ahora mismo por encima o por debajo de media, sin que haya cruce)."""
+    verde_val = last_closed["verde"]
+    tsa_bullish = bool(last_closed["tsa_bullish"])
+    adx_val = last_closed["adx"]
+    di_plus, di_minus = last_closed["di_plus"], last_closed["di_minus"]
+
+    if direccion == "alza":
+        rango_valor_txt = f"{VALOR_MIN_ALZA} a {VALOR_MAX_ALZA}"
+        if VALOR_MIN_ALZA <= verde_val <= VALOR_MAX_ALZA:
+            valor_estado = "dentro"
+        elif verde_val > VALOR_MAX_ALZA:
+            valor_estado = "extendido"
+        else:
+            valor_estado = "contrario"
+        tsa_ok = tsa_bullish
+        adx_ok = adx_val >= ADX_MEDIO and di_plus > di_minus
+    else:
+        rango_valor_txt = f"≤ {VALOR_MAX_BAJA}"
+        if verde_val <= VALOR_MAX_BAJA:
+            valor_estado = "dentro"
+        elif verde_val <= 0:
+            valor_estado = "extendido"
+        else:
+            valor_estado = "contrario"
+        tsa_ok = not tsa_bullish
+        adx_ok = adx_val >= ADX_MEDIO and di_minus > di_plus
+
+    valor_ok = valor_estado in ("dentro", "extendido")
+    n_ok = sum([valor_ok, tsa_ok, adx_ok])
+
+    return {
+        "verde_val": verde_val, "tsa_bullish": tsa_bullish, "adx_val": adx_val,
+        "valor_estado": valor_estado, "rango_valor_txt": rango_valor_txt,
+        "valor_ok": valor_ok, "tsa_ok": tsa_ok, "adx_ok": adx_ok, "n_ok": n_ok,
+    }
+
+
+def resumen_otras_temporalidades_cruce(otros_dfs: dict) -> str:
+    """Linea por cada otra temporalidad: posicion actual (verde vs media,
+    sin que haga falta cruce) y cuantas de las 3 condiciones se cumplen
+    ahora mismo."""
+    lineas = []
+    for iv, odf in otros_dfs.items():
+        ult = odf.iloc[-2]
+        direccion_actual = "alza" if ult["verde"] > ult["media"] else "baja"
+        c = evaluar_condiciones_koncorde(ult, direccion_actual)
+        estado_txt = _col("alcista" if direccion_actual == "alza" else "bajista")
+        lineas.append(f"{iv}: {estado_txt}, {c['n_ok']}/3")
+    return "Otras temporalidades:\n" + "\n".join(lineas) if lineas else ""
+
+
+def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict, otros_dfs: dict) -> bool:
     """Revisa una temporalidad y actualiza 'state' in-place. 'df' debe traer
     ya calculados verde/marron/media (compute_koncorde), tsa_bullish
-    (compute_trend_speed) y adx/di_plus/di_minus (compute_adx).
+    (compute_trend_speed) y adx/di_plus/di_minus (compute_adx). 'otros_dfs'
+    son los df ya calculados de las demas temporalidades, para el resumen
+    al final del mensaje del cruce.
     Devuelve True si el estado cambio (para saber si hay que guardar)."""
     last_closed = df.iloc[-2]
     close_time_str = last_closed["close_time"].isoformat()
@@ -494,53 +590,22 @@ def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict) -> bool:
 
     state_changed = False
 
-    # --- Evaluar las 3 condiciones (se usan tanto en el desglose del
-    # mensaje 1 como en los avisos de confirmacion parcial/total) ---
-    verde_val = last_closed["verde"]
-    tsa_bullish = bool(last_closed["tsa_bullish"])
-    adx_val = last_closed["adx"]
-    di_plus, di_minus = last_closed["di_plus"], last_closed["di_minus"]
-
-    if direccion == "alza":
-        rango_valor_txt = f"{VALOR_MIN_ALZA} a {VALOR_MAX_ALZA}"
-        if VALOR_MIN_ALZA <= verde_val <= VALOR_MAX_ALZA:
-            valor_estado = "dentro"
-        elif verde_val > VALOR_MAX_ALZA:
-            valor_estado = "extendido"   # "en pleno proceso": misma direccion, fuera del rango validado
-        else:
-            valor_estado = "contrario"   # por debajo del rango, ni siquiera en la misma direccion
-        tsa_ok = tsa_bullish
-        adx_ok = adx_val >= ADX_MEDIO and di_plus > di_minus
-    else:
-        rango_valor_txt = f"≤ {VALOR_MAX_BAJA}"
-        if verde_val <= VALOR_MAX_BAJA:
-            valor_estado = "dentro"
-        elif verde_val <= 0:
-            valor_estado = "extendido"   # "en pleno proceso" en el lado bajista: negativo pero no tanto
-        else:
-            valor_estado = "contrario"   # positivo en un cruce bajista, direccion contraria
-        tsa_ok = not tsa_bullish
-        adx_ok = adx_val >= ADX_MEDIO and di_minus > di_plus
-
-    valor_ok = valor_estado in ("dentro", "extendido")  # 🟢 y 🟡 cuentan; solo 🔴 (direccion contraria) no
-    n_ok = sum([valor_ok, tsa_ok, adx_ok])
+    c = evaluar_condiciones_koncorde(last_closed, direccion)
+    verde_val, tsa_bullish, adx_val = c["verde_val"], c["tsa_bullish"], c["adx_val"]
+    valor_estado, rango_valor_txt = c["valor_estado"], c["rango_valor_txt"]
+    valor_ok, tsa_ok, adx_ok, n_ok = c["valor_ok"], c["tsa_ok"], c["adx_ok"], c["n_ok"]
     sufijo = "up" if direccion == "alza" else "down"  # se usa en las 3 claves de estado de abajo
 
     def _icono(ok):
         return "✅" if ok else "❌"
 
-    ICONO_VALOR = {"dentro": "🟢", "extendido": "🟡", "contrario": "🔴"}
-    TEXTO_VALOR = {
-        "dentro": "dentro del rango validado",
-        "extendido": "fuera de rango, en pleno proceso (sin ventaja estadistica demostrada)",
-        "contrario": "direccion contraria al cruce",
-    }
     desglose = (
         f"Valor verde: {verde_val:.1f} {ICONO_VALOR[valor_estado]} "
         f"({TEXTO_VALOR[valor_estado]}, rango validado {rango_valor_txt})\n"
-        f"Trend Speed Analyzer: {'alcista' if tsa_bullish else 'bajista'} {_icono(tsa_ok)}\n"
+        f"Trend Speed Analyzer: {_col('alcista' if tsa_bullish else 'bajista')} {_icono(tsa_ok)}\n"
         f"ADX: {adx_val:.1f} {_icono(adx_ok)} (≥{ADX_MEDIO:.0f} y DI dominante a favor)"
     )
+    resumen_otras = resumen_otras_temporalidades_cruce(otros_dfs)
 
     # --- 1) Alerta inmediata del cruce, con el desglose de las 3 condiciones ---
     state_key = f"last_alert_{sufijo}_close_time_{interval}"
@@ -548,9 +613,9 @@ def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict) -> bool:
         msg = (
             f"Koncorde {SYMBOL} {interval}\n"
             f"{CROSS_DESC[direccion]}\n"
-            f"Vela cerrada: {close_time_str}\n"
             f"Precio cierre: {last_closed['close']:.2f}\n\n"
             f"{desglose}"
+            + (f"\n\n{resumen_otras}" if resumen_otras else "")
         )
         print(msg)
         send_telegram(msg)
@@ -566,7 +631,6 @@ def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict) -> bool:
             msg_conf = (
                 f"Koncorde {SYMBOL} {interval}\n"
                 f"{CONFIRMED_DESC[direccion]}\n"
-                f"Vela cerrada: {close_time_str}\n"
                 f"Precio cierre: {last_closed['close']:.2f}"
             )
             print(msg_conf)
@@ -586,7 +650,6 @@ def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict) -> bool:
                 f"Koncorde {SYMBOL} {interval}\n"
                 f"{PARTIAL_DESC[direccion]}\n"
                 f"Falta: {fallo}\n"
-                f"Vela cerrada: {close_time_str}\n"
                 f"Precio cierre: {last_closed['close']:.2f}"
             )
             print(msg_partial)
@@ -606,33 +669,45 @@ def main():
     state = load_state()
     state_changed = False
 
+    # --- Paso 1: descargar y calcular las 3 temporalidades por adelantado.
+    # Hace falta tener las 3 listas antes de revisar ninguna, porque cada
+    # mensaje ahora incluye un resumen del estado de las OTRAS 2
+    # temporalidades al final. ---
+    dfs = {}
+    dfs_ver = {}
     for interval in INTERVALS:
         try:
-            # Una sola descarga y un solo calculo de indicadores por
-            # temporalidad, reutilizados por los 2 sistemas de aviso (antes
-            # cada uno descargaba y calculaba por su cuenta, duplicando
-            # peticiones a Binance y calculo de Koncorde/ADX).
             df = get_klines(interval=interval)
             df = compute_koncorde(df)
             df = compute_trend_speed(df)
             df = compute_adx(df)
+            dfs[interval] = df
+            dfs_ver[interval] = compute_veredicto(df)
         except Exception as e:
             print(f"[{interval}] [ERROR] {e}")
+
+    # --- Paso 2: revisar cada temporalidad, con acceso a los datos ya
+    # calculados de las demas para el resumen. ---
+    for interval in INTERVALS:
+        if interval not in dfs:
             continue
+        otros_dfs = {iv: dfs[iv] for iv in INTERVALS if iv != interval and iv in dfs}
+        otros_ver = {iv: dfs_ver[iv] for iv in INTERVALS if iv != interval and iv in dfs_ver}
 
         try:
-            if revisar_intervalo(df, interval, state):
+            if revisar_intervalo(dfs[interval], interval, state, otros_dfs):
                 state_changed = True
         except Exception as e:
             # Si falla una temporalidad (ej. un fallo puntual de red), las
             # demas se siguen revisando igualmente.
             print(f"[{interval}] [ERROR] {e}")
 
-        try:
-            if revisar_veredicto(df, interval, state):
-                state_changed = True
-        except Exception as e:
-            print(f"[{interval}][veredicto] [ERROR] {e}")
+        if interval in dfs_ver:
+            try:
+                if revisar_veredicto(dfs_ver[interval], interval, state, otros_ver):
+                    state_changed = True
+            except Exception as e:
+                print(f"[{interval}][veredicto] [ERROR] {e}")
 
     if state_changed:
         save_state(state)
