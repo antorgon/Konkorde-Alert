@@ -1,6 +1,6 @@
 # Koncorde Alert (GitHub Actions, auto-perpetuo)
 
-Revisa el Koncorde de BTCUSDT en 3 temporalidades (1h, 4h y 1d) cada 10
+Revisa el Koncorde de BTCUSDT en 3 temporalidades (1h, 4h y 1d) cada 2
 minutos y te avisa por Telegram.
 Corre gratis en los servidores de GitHub, indefinidamente, sin que tengas
 que tener tu ordenador encendido ni depender de ningún servicio externo.
@@ -14,7 +14,7 @@ bajo trafico, no de esta configuración). La solución fue un **workflow
 auto-perpetuo**:
 
 - Se arranca una vez (a mano, con "Run workflow").
-- Dentro, un bucle comprueba el Koncorde cada 10 minutos durante ~5h40m (el
+- Dentro, un bucle comprueba el Koncorde cada 2 minutos durante ~5h40m (el
   máximo que permite una sola ejecución de GitHub Actions son 6h).
 - Justo antes de acabar, el propio workflow se vuelve a lanzar a sí mismo
   vía la API de GitHub (usando el token que GitHub ya proporciona
@@ -41,17 +41,27 @@ lista al principio de `koncorde_alert.py`:
 INTERVALS = ["1h", "4h", "1d"]
 ```
 
-**Sobre la frecuencia de chequeo (10 min)**: como la vela más corta es de
-1h, revisar cada 10 min ya garantiza detectar el cierre de cada vela de las
-3 temporalidades bastante antes de que llegue la siguiente -- en teoría no
-debería perderse ningún cambio real por frecuencia. La única forma real de
-perderse algo es que el propio workflow tenga algún hueco de inactividad
-(fallo puntual, cancelación) más largo que el periodo de una vela; en ese
-caso, cualquier cambio de estado que fuera y volviera dentro de ese hueco
-sería invisible (solo se compara la última vela cerrada contra la
-anterior, no el histórico completo). Un intervalo más corto reduce ese
-riesgo marginalmente, pero la protección real viene de que el workflow no
-tenga huecos (ver más arriba el sistema auto-perpetuo + red de seguridad).
+**Sobre la frecuencia de chequeo (2 min)**: como la vela más corta es de
+1h, revisar cada 2 min ya garantiza detectar el cierre de cada vela de las
+3 temporalidades con muy poco margen extra sobre el momento real del
+cierre -- en teoría no debería perderse ningún cambio real por
+frecuencia. La única forma real de perderse algo es que el propio
+workflow tenga algún hueco de inactividad (fallo puntual, cancelación)
+más largo que el periodo de una vela; en ese caso, cualquier cambio de
+estado que fuera y volviera dentro de ese hueco sería invisible (solo se
+compara la última vela cerrada contra la anterior, no el histórico
+completo). Un intervalo más corto reduce ese riesgo marginalmente, pero
+la protección real viene de que el workflow no tenga huecos (ver más
+arriba el sistema auto-perpetuo + red de seguridad).
+
+Importante: bajar este intervalo reduce el margen de sondeo (cuanto tarda
+en detectarse una vela ya cerrada), pero **no** puede adelantar el propio
+cierre de la vela -- una señal de 1h solo existe cuando esa hora termina,
+por definición. Si el "llegar tarde" viene de ahí (hasta 59 min de
+movimiento ya sucedido antes de que la señal exista), la unica forma de
+reducirlo de verdad seria añadir una temporalidad mas corta (ej. 15m) a
+`INTERVALS`, lo cual cambia el perfil de ruido/señal de la estrategia y
+no esta validado con los analisis que hemos hecho hasta ahora.
 
 ## Qué avisos manda
 
@@ -151,11 +161,12 @@ Entra en la pestaña Actions:
 
 Además de las alertas de cruce, hay un **segundo sistema de avisos totalmente
 independiente** (los mensajes de Telegram empiezan por "Bitman"), basado en
-un panel de trading que se compartió como referencia. A diferencia del
-sistema de cruces (que avisa en el instante exacto en que `verde` cruza
-`media`), este evalúa un **estado** en cada vela y solo avisa cuando ese
-estado **cambia**. Sigue el criterio de 3 pasos descrito para leer las
-señales de ese panel -- tendencia, impulso, confirmación:
+un panel de trading que se compartió como referencia. Igual que el sistema
+de cruces, solo mira velas ya CERRADAS (nunca la vela en formación, para
+evitar repintado), pero en vez de avisar en un cruce puntual, evalúa un
+**estado** en cada vela y solo avisa cuando ese estado **cambia**. Sigue el
+criterio de 3 pasos descrito para leer las señales de ese panel --
+tendencia, impulso, confirmación:
 
 - **COMPRAR**: **tendencia** alcista (AO, Awesome Oscillator 5/34) +
   **impulso** (ADX subiendo) + **confirmación** (Koncorde "todo el valor",
@@ -186,6 +197,35 @@ filtro de temporalidad superior encadenado (1h exige 4h y 1d alcistas a la
 vez) ni el modelo de asignación de capital de la versión "Pro" del panel
 original, para mantener el alcance similar al resto del sistema.
 
+## Sistema 3: Cruce EN VIVO (intra-vela, sin esperar al cierre)
+
+Los sistemas 1 y 2 solo miran velas ya cerradas, así que como mínimo
+esperan a que termine la vela más corta (1h) antes de poder avisar --
+esto es intencionado, evita el "repintado" (que un cruce aparezca y
+desaparezca varias veces mientras la vela todavía se está formando). Si
+prefieres saber el cruce en el instante en que se produce, aunque pueda
+revertirse antes de que la vela cierre del todo, este tercer sistema mira
+la **vela en curso** (la última que devuelve Binance, que se sigue
+actualizando en vivo) y avisa en cuanto `verde` cambia de lado respecto a
+`media`:
+
+```
+⚡ EN VIVO BTCUSDT 1h
+Verde gira 🔴 bajista (vela todavia en formacion)
+⚠️ Puede repintarse: este cruce puede revertirse antes de que la vela
+cierre del todo. Sin desglose de condiciones (esos umbrales estan
+validados solo para velas ya cerradas).
+Precio actual: 78597.33
+```
+
+No lleva el desglose de valor/TSA/ADX ni el resumen de otras
+temporalidades: los umbrales que usamos están validados únicamente sobre
+cruces ya confirmados (ver más abajo), así que aplicarlos a datos todavía
+en movimiento no tendría ninguna base real -- por eso este aviso es
+deliberadamente más simple. Al arrancar cada ciclo del bucle, la primera
+comprobación de cada temporalidad solo registra la posición base sin
+avisar (no es un cambio real, es el punto de partida).
+
 ## Cambiar de par o de temporalidades
 
 Edita en `koncorde_alert.py`:
@@ -193,16 +233,16 @@ Edita en `koncorde_alert.py`:
 SYMBOL = "BTCUSDT"
 INTERVALS = ["1h", "4h", "1d"]
 ```
-Y en `.github/workflows/koncorde.yml`, la línea `sleep 600` (segundos =
-10 min) dentro del bucle, si quieres otra frecuencia de chequeo.
+Y en `.github/workflows/koncorde.yml`, la línea `sleep 120` (segundos =
+2 min) dentro del bucle, si quieres otra frecuencia de chequeo.
 
 ## Notas
 
 - `state.json` guarda, por separado, la última vela ya avisada para cada
   combinación de temporalidad y tipo de aviso (cruce alza/baja + parcial
-  alza/baja + confirmado alza/baja = 6 tipos × 3 temporalidades = hasta 18
-  claves), para no repetir mensajes. El propio workflow lo actualiza y lo
-  commitea solo, no lo toques a mano.
+  alza/baja + confirmado alza/baja + veredicto Bitman + posición en vivo =
+  7 tipos × 3 temporalidades = hasta 21 claves), para no repetir mensajes.
+  El propio workflow lo actualiza y lo commitea solo, no lo toques a mano.
 - La fórmula del Koncorde usada es una reconstrucción de código abierto de
   la comunidad (la versión 2.0 oficial de Blai5 es código cerrado), así que
   puede haber pequeñas diferencias frente a TradingView, aunque los cruces
@@ -211,6 +251,6 @@ Y en `.github/workflows/koncorde.yml`, la línea `sleep 600` (segundos =
   originales (Trend Speed Analyzer: Zeiierman, CC BY-NC-SA 4.0; ADX: fórmula
   estándar de Wilder / `ta.dmi` de Pine), no aproximaciones.
 - Las 3 peticiones a Binance de cada pasada (una por temporalidad, compartida
-  entre los 2 sistemas de aviso -- antes cada sistema descargaba y calculaba
-  por su cuenta, el doble de peticiones) reutilizan la misma conexión HTTPS
+  entre los 3 sistemas de aviso -- antes cada sistema descargaba y calculaba
+  por su cuenta, más peticiones) reutilizan la misma conexión HTTPS
   (`requests.Session`).
