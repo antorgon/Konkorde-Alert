@@ -1,7 +1,7 @@
 """
 Alerta Koncorde -> Telegram
 ============================
-Se ejecuta repetidamente (cada 10 min) dentro del bucle del workflow de
+Se ejecuta repetidamente (cada 2 min) dentro del bucle del workflow de
 GitHub Actions (.github/workflows/koncorde.yml), que se auto-relanza cada
 ~5h40m para funcionar de forma indefinida. Cada ejecucion de este script:
 
@@ -9,10 +9,15 @@ GitHub Actions (.github/workflows/koncorde.yml), que se auto-relanza cada
   2. Calcula el Koncorde (verde, marron, azul, media), el Trend Speed
      Analyzer (dyn_ema, tsa_bullish), el ADX (fuerza de tendencia), el AO,
      el BBWP y el veredicto Bitman para cada temporalidad
-  3. Mira si en la ultima vela CERRADA "verde" cruzo la "media" (sistema 1)
-     y si el veredicto Bitman cambio respecto a la vela anterior (sistema 2)
-  4. Manda por Telegram el aviso correspondiente, incluyendo al final un
-     resumen del estado de las otras 2 temporalidades
+  3. Revisa 3 sistemas de aviso independientes:
+     - Cruces confirmados (solo vela ya CERRADA, con desglose de 3
+       condiciones validadas con datos historicos)
+     - Bitman (COMPRAR/VENDER/ESPERAR, tambien solo vela cerrada)
+     - Cruce EN VIVO (la vela EN CURSO, sin esperar a que cierre --
+       deliberadamente mas simple y con aviso de que puede repintarse)
+  4. Manda por Telegram el aviso correspondiente, incluyendo al final (en
+     los 2 primeros sistemas) un resumen del estado de las otras 2
+     temporalidades
   5. Guarda en state.json la ultima vela avisada de cada tipo, para no
      duplicar alertas entre ejecuciones
 
@@ -176,6 +181,61 @@ def detectar_cruce(df: pd.DataFrame) -> str | None:
     if prev["verde"] >= prev["media"] and last["verde"] < last["media"]:
         return "baja"
     return None
+
+
+# --------------------------- SISTEMA 3: CRUCE EN VIVO (intra-vela) ---------------------------
+# Tercer sistema de aviso, deliberadamente separado de los otros 2. Los
+# sistemas de cruces confirmados y Bitman SOLO miran velas ya CERRADAS
+# (para evitar repintado: que un cruce aparezca y desaparezca varias veces
+# mientras la vela todavia se esta formando). Este sistema hace justo lo
+# contrario a propósito: mira la vela EN CURSO (la ultima fila del df,
+# iloc[-1], que Binance sigue actualizando en vivo hasta que cierra), para
+# avisar en el instante en que "verde" cruza "media", aunque ese cruce
+# pueda revertirse antes de que la vela termine de cerrar.
+#
+# No lleva el desglose de valor/TSA/ADX: esos umbrales estan validados con
+# analisis_valor_verde.py sobre cruces YA CERRADOS, no hay ninguna garantia
+# de que se comporten igual sobre datos todavia en movimiento -- por eso
+# este aviso es deliberadamente mas simple, y avisa explicitamente de que
+# puede repintarse.
+def detectar_posicion_vivo(df: pd.DataFrame) -> str:
+    """Posicion actual (no cruce, posicion) de la vela EN CURSO."""
+    ultima = df.iloc[-1]
+    return "alza" if ultima["verde"] > ultima["media"] else "baja"
+
+
+def revisar_cruce_vivo(df: pd.DataFrame, interval: str, state: dict) -> bool:
+    """Avisa en el instante en que la posicion de la vela en curso cambia
+    de lado (verde por encima/por debajo de media), sin esperar a que
+    cierre. Devuelve True si el estado cambio."""
+    pos_actual = detectar_posicion_vivo(df)
+    state_key = f"last_live_pos_{interval}"
+    pos_previa = state.get(state_key)
+
+    if pos_previa == pos_actual:
+        return False
+
+    state[state_key] = pos_actual
+
+    if pos_previa is None:
+        # primera vez que se evalua esta temporalidad (arranque del ciclo):
+        # se guarda la posicion base sin avisar, no es un cambio real
+        print(f"[{interval}][en vivo] Posicion inicial registrada: {pos_actual}")
+        return True
+
+    ultima = df.iloc[-1]
+    texto_pos = _col("alcista" if pos_actual == "alza" else "bajista")
+    msg = (
+        f"⚡ EN VIVO {SYMBOL} {interval}\n"
+        f"Verde gira {texto_pos} (vela todavia en formacion)\n"
+        f"⚠️ Puede repintarse: este cruce puede revertirse antes de que la "
+        f"vela cierre del todo. Sin desglose de condiciones (esos umbrales "
+        f"estan validados solo para velas ya cerradas).\n"
+        f"Precio actual: {ultima['close']:.2f}"
+    )
+    print(msg)
+    send_telegram(msg)
+    return True
 
 
 # --------------------------- TREND SPEED ANALYZER (Zeiierman) ---------------------------
@@ -713,6 +773,12 @@ def main():
                     state_changed = True
             except Exception as e:
                 print(f"[{interval}][veredicto] [ERROR] {e}")
+
+        try:
+            if revisar_cruce_vivo(dfs[interval], interval, state):
+                state_changed = True
+        except Exception as e:
+            print(f"[{interval}][en vivo] [ERROR] {e}")
 
     if state_changed:
         save_state(state)
