@@ -403,16 +403,20 @@ def resumen_otras_temporalidades_bitman(otros_ver: dict) -> str:
     return "Otras temporalidades:\n" + "\n".join(lineas) if lineas else ""
 
 
-def revisar_veredicto(df_ver: pd.DataFrame, interval: str, state: dict, otros_ver: dict) -> bool:
+def construir_bloque_bitman(df_ver: pd.DataFrame, interval: str, state: dict) -> str | None:
     """Revisa el sistema de veredicto (2ª via, independiente del cruce) para
     una temporalidad. 'df_ver' debe venir YA con compute_veredicto aplicado.
     Mira la vela EN CURSO (iloc[-1], se sigue actualizando en vivo) para
-    avisar en el instante en que el veredicto cambia, sin esperar a que la
+    detectar el cambio en el instante en que ocurre, sin esperar a que la
     vela cierre -- por eso puede repintarse (el veredicto puede revertirse
-    antes de que la vela termine). Devuelve True si el estado cambio."""
+    antes de que la vela termine).
+    Actualiza 'state' in-place. Devuelve el texto del bloque (sin el
+    resumen de otras temporalidades, que se añade una sola vez al final del
+    mensaje combinado en main()) si hubo un cambio real que avisar, o None
+    si no hay nada nuevo."""
     if len(df_ver) < 2:
         print(f"[{interval}][veredicto] Datos insuficientes, se omite esta pasada.")
-        return False
+        return None
 
     ultima = df_ver.iloc[-1]
     veredicto_actual = ultima["veredicto"]
@@ -422,7 +426,7 @@ def revisar_veredicto(df_ver: pd.DataFrame, interval: str, state: dict, otros_ve
 
     if veredicto_previo == veredicto_actual:
         print(f"[{interval}][veredicto] Sin cambio: sigue en {veredicto_actual}.")
-        return False
+        return None
 
     state[state_key] = veredicto_actual
 
@@ -430,7 +434,7 @@ def revisar_veredicto(df_ver: pd.DataFrame, interval: str, state: dict, otros_ve
         # primera vez que se evalua esta temporalidad (arranque del ciclo):
         # se guarda el veredicto base sin avisar, no es un cambio real
         print(f"[{interval}][veredicto] Veredicto inicial registrado: {veredicto_actual}")
-        return True
+        return None
 
     if veredicto_actual == "COMPRAR":
         motivo = _col("AO alcista") + " + ADX con impulso + Koncorde confirma acumulacion"
@@ -442,9 +446,7 @@ def revisar_veredicto(df_ver: pd.DataFrame, interval: str, state: dict, otros_ve
         fila["_adx_subiendo"] = ultima["adx"] > anterior["adx"]
         motivo = _col(motivo_espera(fila))
 
-    resumen_otras = resumen_otras_temporalidades_bitman(otros_ver)
-
-    msg = (
+    bloque = (
         f"Bitman {SYMBOL} {interval}\n"
         f"{veredicto_previo} -> {veredicto_actual}\n"
         f"{motivo}\n"
@@ -454,7 +456,7 @@ def revisar_veredicto(df_ver: pd.DataFrame, interval: str, state: dict, otros_ve
         f"{bbwp_texto(ultima['bbwp'])}\n"
         f"⚠️ Vela todavia en formacion, puede repintarse\n"
         f"Precio actual: {ultima['close']:.2f}"
-        + (f"\n\n{resumen_otras}" if resumen_otras else "")
+        + (f"\n{resumen_otras}" if resumen_otras else "")
     )
     print(msg)
     send_telegram(msg)
@@ -637,7 +639,7 @@ def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict, otros_dfs: d
 
     desglose = (
         f"Valor verde: {verde_val:.1f} {ICONO_VALOR[valor_estado]} "
-        f"({TEXTO_VALOR[valor_estado]}, rango validado {rango_valor_txt})\n"
+        f"({TEXTO_VALOR[valor_estado]})\n"
         f"Trend Speed Analyzer: {_col('alcista' if tsa_bullish else 'bajista')} {_icono(tsa_ok)}\n"
         f"ADX: {adx_val:.1f} {_icono(adx_ok)} (≥{ADX_MEDIO:.0f} y DI dominante a favor)"
     )
@@ -648,9 +650,9 @@ def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict, otros_dfs: d
         f"Koncorde {SYMBOL} {interval}\n"
         f"{CROSS_DESC[direccion]}\n"
         f"⚠️ Vela todavia en formacion, puede repintarse\n"
-        f"Precio actual: {ultima['close']:.2f}\n\n"
+        f"Precio actual: {ultima['close']:.2f}\n"
         f"{desglose}"
-        + (f"\n\n{resumen_otras}" if resumen_otras else "")
+        + (f"\n{resumen_otras}" if resumen_otras else "")
     )
     print(msg)
     send_telegram(msg)
