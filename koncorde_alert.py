@@ -17,8 +17,10 @@ GitHub Actions (.github/workflows/koncorde.yml), que se auto-relanza cada
      - Cruces (con desglose de 3 condiciones validadas con datos
        historicos: valor, Trend Speed Analyzer, ADX)
      - Bitman (COMPRAR/VENDER/ESPERAR)
-  4. Manda por Telegram el aviso correspondiente, incluyendo al final un
-     resumen del estado EN VIVO de las otras 2 temporalidades
+  4. Manda por Telegram el aviso correspondiente (fusionando cruce y
+     Bitman en un unico mensaje si ambos tienen algo nuevo en la misma
+     pasada), incluyendo al final un resumen del estado EN VIVO de las
+     3 temporalidades (la actual, marcada, y las otras 2)
   5. Guarda en state.json la ultima posicion/veredicto conocido de cada
      temporalidad, para avisar solo en los cambios reales
 
@@ -443,7 +445,6 @@ def construir_bloque_bitman(df_ver: pd.DataFrame, interval: str, state: dict) ->
         f"Koncorde (todo el valor): {ultima['kon_val']:.1f}\n"
         f"ADX: {ultima['adx']:.1f}\n"
         f"{bbwp_texto(ultima['bbwp'])}\n"
-        f"⚠️ Vela todavia en formacion, puede repintarse\n"
         f"Precio actual: {ultima['close']:.2f}"
     )
     print(bloque)
@@ -567,25 +568,32 @@ def evaluar_condiciones_koncorde(vela, direccion: str) -> dict:
     }
 
 
-def resumen_otras_temporalidades(otros_dfs: dict, otros_ver: dict) -> str:
-    """Una linea por cada otra temporalidad, combinando el estado EN VIVO
-    de los 2 sistemas: posicion + condiciones del Koncorde, y el veredicto
-    de Bitman."""
-    lineas = []
+def _linea_temporalidad(iv: str, df: pd.DataFrame, df_ver: pd.DataFrame | None) -> str:
+    """Construye la linea de resumen (Koncorde + Bitman) para una
+    temporalidad dada, a partir de sus datos ya calculados."""
+    ult = df.iloc[-1]
+    direccion_actual = "alza" if ult["verde"] > ult["media"] else "baja"
+    c = evaluar_condiciones_koncorde(ult, direccion_actual)
+    koncorde_txt = _col("alcista" if direccion_actual == "alza" else "bajista") + f" {c['n_ok']}/3"
+
+    bitman_txt = ""
+    if df_ver is not None:
+        v = df_ver.iloc[-1]["veredicto"]
+        icono = "🟢" if v == "COMPRAR" else "🔴" if v == "VENDER" else "⚪"
+        bitman_txt = f" · Bitman {icono} {v}"
+
+    return f"{iv}: Koncorde {koncorde_txt}{bitman_txt}"
+
+
+def resumen_temporalidades(interval_actual: str, df_actual: pd.DataFrame, df_ver_actual: pd.DataFrame,
+                            otros_dfs: dict, otros_ver: dict) -> str:
+    """Una linea por CADA temporalidad (la actual, marcada, y las otras 2),
+    combinando el estado EN VIVO de los 2 sistemas: posicion + condiciones
+    del Koncorde, y el veredicto de Bitman."""
+    lineas = [f"{_linea_temporalidad(interval_actual, df_actual, df_ver_actual)} (esta)"]
     for iv in otros_dfs:
-        ult = otros_dfs[iv].iloc[-1]
-        direccion_actual = "alza" if ult["verde"] > ult["media"] else "baja"
-        c = evaluar_condiciones_koncorde(ult, direccion_actual)
-        koncorde_txt = _col("alcista" if direccion_actual == "alza" else "bajista") + f" {c['n_ok']}/3"
-
-        bitman_txt = ""
-        if iv in otros_ver:
-            v = otros_ver[iv].iloc[-1]["veredicto"]
-            icono = "🟢" if v == "COMPRAR" else "🔴" if v == "VENDER" else "⚪"
-            bitman_txt = f" · Bitman {icono} {v}"
-
-        lineas.append(f"{iv}: Koncorde {koncorde_txt}{bitman_txt}")
-    return "Otras temporalidades:\n" + "\n".join(lineas) if lineas else ""
+        lineas.append(_linea_temporalidad(iv, otros_dfs[iv], otros_ver.get(iv)))
+    return "Temporalidades:\n" + "\n".join(lineas)
 
 
 def construir_bloque_cruce(df: pd.DataFrame, interval: str, state: dict) -> str | None:
@@ -642,7 +650,6 @@ def construir_bloque_cruce(df: pd.DataFrame, interval: str, state: dict) -> str 
     partes = [
         f"Koncorde {SYMBOL} {interval}\n"
         f"{CROSS_DESC[direccion]}\n"
-        f"⚠️ Vela todavia en formacion, puede repintarse\n"
         f"Precio actual: {ultima['close']:.2f}\n"
         f"{desglose}"
     ]
@@ -716,8 +723,8 @@ def main():
 
         bloques = [b for b in (bloque_cruce, bloque_bitman) if b is not None]
         if bloques:
-            resumen_otras = resumen_otras_temporalidades(otros_dfs, otros_ver)
-            msg = "\n\n".join(bloques) + (f"\n\n{resumen_otras}" if resumen_otras else "")
+            resumen = resumen_temporalidades(interval, dfs[interval], dfs_ver.get(interval), otros_dfs, otros_ver)
+            msg = "\n\n".join(bloques) + f"\n\n{resumen}"
             send_telegram(msg)
 
     # Se guarda siempre (no solo cuando hay mensaje): construir_bloque_*
