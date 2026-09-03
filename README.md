@@ -70,12 +70,12 @@ tienen algo nuevo que avisar en la misma temporalidad en la misma pasada,
 se **fusionan en un único mensaje de Telegram** (en vez de mandar uno por
 separado para cada uno). Las 3 temporalidades (1h/4h/1d) siempre van en
 mensajes distintos, para no perder de vista a cuál corresponde cada cosa.
-El resumen de "otras temporalidades" al final combina el estado de los 2
-sistemas en una sola línea por temporalidad (ej. `4h: Koncorde 🟢 alcista
-2/3 · Bitman 🟢 COMPRAR`), y solo aparece una vez al final del mensaje,
-aunque se hayan fusionado varios bloques. "Alcista"/"bajista" llevan 🟢/🔴
-delante -- Telegram no admite texto de color real en mensajes de bot, es
-el sustituto habitual.
+Al final de cada mensaje hay un resumen con **las 3 temporalidades**
+(la que disparó el aviso, marcada `(esta)`, y las otras 2), combinando el
+estado de los 2 sistemas en una sola línea por temporalidad (ej. `4h:
+Koncorde 🟢 alcista 2/3 · Bitman 🟢 COMPRAR`). "Alcista"/"bajista" llevan
+🟢/🔴 delante -- Telegram no admite texto de color real en mensajes de bot,
+es el sustituto habitual.
 
 ### Sistema 1: Cruces del Koncorde
 
