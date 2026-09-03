@@ -392,17 +392,6 @@ def motivo_espera(row) -> str:
     return "Señales sin alineacion clara"
 
 
-def resumen_otras_temporalidades_bitman(otros_ver: dict) -> str:
-    """Linea por cada otra temporalidad con su veredicto EN VIVO actual
-    (COMPRAR en verde, VENDER en rojo, ESPERAR sin colorear)."""
-    lineas = []
-    for iv, odf_ver in otros_ver.items():
-        v = odf_ver.iloc[-1]["veredicto"]
-        icono = "🟢" if v == "COMPRAR" else "🔴" if v == "VENDER" else "⚪"
-        lineas.append(f"{iv}: {icono} {v}")
-    return "Otras temporalidades:\n" + "\n".join(lineas) if lineas else ""
-
-
 def construir_bloque_bitman(df_ver: pd.DataFrame, interval: str, state: dict) -> str | None:
     """Revisa el sistema de veredicto (2ª via, independiente del cruce) para
     una temporalidad. 'df_ver' debe venir YA con compute_veredicto aplicado.
@@ -456,11 +445,9 @@ def construir_bloque_bitman(df_ver: pd.DataFrame, interval: str, state: dict) ->
         f"{bbwp_texto(ultima['bbwp'])}\n"
         f"⚠️ Vela todavia en formacion, puede repintarse\n"
         f"Precio actual: {ultima['close']:.2f}"
-        + (f"\n{resumen_otras}" if resumen_otras else "")
     )
-    print(msg)
-    send_telegram(msg)
-    return True
+    print(bloque)
+    return bloque
 
 
 # --------------------------- ESTADO (anti-duplicados) ---------------------------
@@ -580,34 +567,43 @@ def evaluar_condiciones_koncorde(vela, direccion: str) -> dict:
     }
 
 
-def resumen_otras_temporalidades_cruce(otros_dfs: dict) -> str:
-    """Linea por cada otra temporalidad: posicion EN VIVO actual (verde vs
-    media, sin que haga falta cruce) y cuantas de las 3 condiciones se
-    cumplen ahora mismo."""
+def resumen_otras_temporalidades(otros_dfs: dict, otros_ver: dict) -> str:
+    """Una linea por cada otra temporalidad, combinando el estado EN VIVO
+    de los 2 sistemas: posicion + condiciones del Koncorde, y el veredicto
+    de Bitman."""
     lineas = []
-    for iv, odf in otros_dfs.items():
-        ult = odf.iloc[-1]
+    for iv in otros_dfs:
+        ult = otros_dfs[iv].iloc[-1]
         direccion_actual = "alza" if ult["verde"] > ult["media"] else "baja"
         c = evaluar_condiciones_koncorde(ult, direccion_actual)
-        estado_txt = _col("alcista" if direccion_actual == "alza" else "bajista")
-        lineas.append(f"{iv}: {estado_txt}, {c['n_ok']}/3")
+        koncorde_txt = _col("alcista" if direccion_actual == "alza" else "bajista") + f" {c['n_ok']}/3"
+
+        bitman_txt = ""
+        if iv in otros_ver:
+            v = otros_ver[iv].iloc[-1]["veredicto"]
+            icono = "🟢" if v == "COMPRAR" else "🔴" if v == "VENDER" else "⚪"
+            bitman_txt = f" · Bitman {icono} {v}"
+
+        lineas.append(f"{iv}: Koncorde {koncorde_txt}{bitman_txt}")
     return "Otras temporalidades:\n" + "\n".join(lineas) if lineas else ""
 
 
-def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict, otros_dfs: dict) -> bool:
+def construir_bloque_cruce(df: pd.DataFrame, interval: str, state: dict) -> str | None:
     """Revisa una temporalidad y actualiza 'state' in-place. 'df' debe traer
     ya calculados verde/marron/media (compute_koncorde), tsa_bullish
-    (compute_trend_speed) y adx/di_plus/di_minus (compute_adx). 'otros_dfs'
-    son los df ya calculados de las demas temporalidades, para el resumen
-    al final del mensaje del cruce.
-    Mira la vela EN CURSO (iloc[-1]) para avisar en el instante en que
-    'verde' cruza 'media', sin esperar a que la vela cierre -- por eso
-    puede repintarse (el cruce puede revertirse antes de que la vela
-    termine). Devuelve True si el estado cambio (para saber si hay que
-    guardar)."""
+    (compute_trend_speed) y adx/di_plus/di_minus (compute_adx).
+    Mira la vela EN CURSO (iloc[-1]) para detectar el cambio en el instante
+    en que 'verde' cruza 'media', sin esperar a que la vela cierre -- por
+    eso puede repintarse (el cruce puede revertirse antes de que la vela
+    termine).
+    Devuelve el texto del bloque -- el cruce y, si aplica, la
+    confirmacion/parcial YA FUSIONADOS EN UN SOLO TEXTO (sin el resumen de
+    otras temporalidades, que se añade una sola vez al final del mensaje
+    combinado en main()) -- si hubo un cambio real que avisar, o None si no
+    hay nada nuevo."""
     if len(df) < 2:
         print(f"[{interval}] Datos insuficientes, se omite esta pasada.")
-        return False
+        return None
 
     ultima = df.iloc[-1]
     direccion = "alza" if ultima["verde"] > ultima["media"] else "baja"
@@ -617,7 +613,7 @@ def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict, otros_dfs: d
 
     if direccion_previa == direccion:
         print(f"[{interval}] Sin cambio de posicion (sigue {direccion}).")
-        return False
+        return None
 
     state[state_key_pos] = direccion
 
@@ -625,13 +621,11 @@ def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict, otros_dfs: d
         # primera vez que se evalua esta temporalidad (arranque del ciclo):
         # se guarda la posicion base sin avisar, no es un cambio real
         print(f"[{interval}] Posicion inicial registrada: {direccion}")
-        return True
-
-    state_changed = True
+        return None
 
     c = evaluar_condiciones_koncorde(ultima, direccion)
     verde_val, tsa_bullish, adx_val = c["verde_val"], c["tsa_bullish"], c["adx_val"]
-    valor_estado, rango_valor_txt = c["valor_estado"], c["rango_valor_txt"]
+    valor_estado = c["valor_estado"]
     valor_ok, tsa_ok, adx_ok, n_ok = c["valor_ok"], c["tsa_ok"], c["adx_ok"], c["n_ok"]
 
     def _icono(ok):
@@ -643,29 +637,18 @@ def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict, otros_dfs: d
         f"Trend Speed Analyzer: {_col('alcista' if tsa_bullish else 'bajista')} {_icono(tsa_ok)}\n"
         f"ADX: {adx_val:.1f} {_icono(adx_ok)} (≥{ADX_MEDIO:.0f} y DI dominante a favor)"
     )
-    resumen_otras = resumen_otras_temporalidades_cruce(otros_dfs)
 
-    # --- 1) Alerta inmediata del cruce, con el desglose de las 3 condiciones ---
-    msg = (
+    # --- Cruce (siempre) + confirmacion TOTAL (3/3) o PARCIAL (2/3) fusionados ---
+    partes = [
         f"Koncorde {SYMBOL} {interval}\n"
         f"{CROSS_DESC[direccion]}\n"
         f"⚠️ Vela todavia en formacion, puede repintarse\n"
         f"Precio actual: {ultima['close']:.2f}\n"
         f"{desglose}"
-        + (f"\n{resumen_otras}" if resumen_otras else "")
-    )
-    print(msg)
-    send_telegram(msg)
+    ]
 
-    # --- 2) Confirmacion TOTAL (3/3) o PARCIAL (2/3), nunca las dos a la vez ---
     if n_ok == 3:
-        msg_conf = (
-            f"Koncorde {SYMBOL} {interval}\n"
-            f"{CONFIRMED_DESC[direccion]}\n"
-            f"Precio actual: {ultima['close']:.2f}"
-        )
-        print(msg_conf)
-        send_telegram(msg_conf)
+        partes.append(CONFIRMED_DESC[direccion])
     elif n_ok == 2:
         if not valor_ok:
             fallo = "valor (" + TEXTO_VALOR[valor_estado] + ")"
@@ -673,26 +656,20 @@ def revisar_intervalo(df: pd.DataFrame, interval: str, state: dict, otros_dfs: d
             fallo = "Trend Speed Analyzer"
         else:
             fallo = "ADX"
-        msg_partial = (
-            f"Koncorde {SYMBOL} {interval}\n"
-            f"{PARTIAL_DESC[direccion]}\n"
-            f"Falta: {fallo}\n"
-            f"Precio actual: {ultima['close']:.2f}"
-        )
-        print(msg_partial)
-        send_telegram(msg_partial)
+        partes.append(f"{PARTIAL_DESC[direccion]}\nFalta: {fallo}")
     else:
         print(
             f"[{interval}] Solo {n_ok}/3 condiciones cumplidas "
-            f"(valor_ok={valor_ok}, tsa_ok={tsa_ok}, adx_ok={adx_ok}). Sin aviso adicional."
+            f"(valor_ok={valor_ok}, tsa_ok={tsa_ok}, adx_ok={adx_ok}). Sin confirmacion/parcial."
         )
 
-    return state_changed
+    bloque = "\n".join(partes)
+    print(bloque)
+    return bloque
 
 
 def main():
     state = load_state()
-    state_changed = False
 
     # --- Paso 1: descargar y calcular las 3 temporalidades por adelantado.
     # Hace falta tener las 3 listas antes de revisar ninguna, porque cada
@@ -711,31 +688,44 @@ def main():
         except Exception as e:
             print(f"[{interval}] [ERROR] {e}")
 
-    # --- Paso 2: revisar cada temporalidad, con acceso a los datos ya
-    # calculados de las demas para el resumen. ---
+    # --- Paso 2: revisar cada temporalidad. Si el cruce y/o Bitman tienen
+    # algo nuevo que avisar en esta misma pasada, se fusiona todo en UN
+    # SOLO mensaje de Telegram por temporalidad (en vez de uno por cada
+    # pieza), con el resumen de las otras 2 temporalidades una unica vez
+    # al final. ---
     for interval in INTERVALS:
         if interval not in dfs:
             continue
         otros_dfs = {iv: dfs[iv] for iv in INTERVALS if iv != interval and iv in dfs}
         otros_ver = {iv: dfs_ver[iv] for iv in INTERVALS if iv != interval and iv in dfs_ver}
 
+        bloque_cruce = None
         try:
-            if revisar_intervalo(dfs[interval], interval, state, otros_dfs):
-                state_changed = True
+            bloque_cruce = construir_bloque_cruce(dfs[interval], interval, state)
         except Exception as e:
             # Si falla una temporalidad (ej. un fallo puntual de red), las
             # demas se siguen revisando igualmente.
             print(f"[{interval}] [ERROR] {e}")
 
+        bloque_bitman = None
         if interval in dfs_ver:
             try:
-                if revisar_veredicto(dfs_ver[interval], interval, state, otros_ver):
-                    state_changed = True
+                bloque_bitman = construir_bloque_bitman(dfs_ver[interval], interval, state)
             except Exception as e:
                 print(f"[{interval}][veredicto] [ERROR] {e}")
 
-    if state_changed:
-        save_state(state)
+        bloques = [b for b in (bloque_cruce, bloque_bitman) if b is not None]
+        if bloques:
+            resumen_otras = resumen_otras_temporalidades(otros_dfs, otros_ver)
+            msg = "\n\n".join(bloques) + (f"\n\n{resumen_otras}" if resumen_otras else "")
+            send_telegram(msg)
+
+    # Se guarda siempre (no solo cuando hay mensaje): construir_bloque_*
+    # tambien actualiza el estado en la primera pasada de cada temporalidad
+    # (registro de la posicion/veredicto base) sin devolver un mensaje, y
+    # ese cambio tiene que persistir igualmente. El propio workflow ya evita
+    # comitear a git si state.json no cambio de verdad.
+    save_state(state)
 
 
 if __name__ == "__main__":
