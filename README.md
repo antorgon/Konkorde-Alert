@@ -65,25 +65,33 @@ detectar cambios a partir de ahí.
 
 ## Qué avisos manda
 
+Los 2 sistemas (cruces y Bitman) son independientes, pero si **ambos**
+tienen algo nuevo que avisar en la misma temporalidad en la misma pasada,
+se **fusionan en un único mensaje de Telegram** (en vez de mandar uno por
+separado para cada uno). Las 3 temporalidades (1h/4h/1d) siempre van en
+mensajes distintos, para no perder de vista a cuál corresponde cada cosa.
+El resumen de "otras temporalidades" al final combina el estado de los 2
+sistemas en una sola línea por temporalidad (ej. `4h: Koncorde 🟢 alcista
+2/3 · Bitman 🟢 COMPRAR`), y solo aparece una vez al final del mensaje,
+aunque se hayan fusionado varios bloques. "Alcista"/"bajista" llevan 🟢/🔴
+delante -- Telegram no admite texto de color real en mensajes de bot, es
+el sustituto habitual.
+
 ### Sistema 1: Cruces del Koncorde
 
-Cuando `verde` cambia de lado respecto a `media`, se envían hasta
-**2 mensajes**, indicando siempre a que temporalidad corresponde (ej.
-"Koncorde BTCUSDT 4h"). Cada mensaje termina con un resumen del estado
-actual de las **otras 2 temporalidades** (posición y nº de condiciones
-cumplidas ahora mismo), para tener contexto completo sin tener que juntar
-varios mensajes. "Alcista"/"bajista" llevan 🟢/🔴 delante -- Telegram no
-admite texto de color real en mensajes de bot, es el sustituto habitual.
+Cuando `verde` cambia de lado respecto a `media`, se construye un bloque
+con el aviso del cambio y, según cuántas de las 3 condiciones se cumplan,
+un texto adicional fusionado en el mismo bloque:
 
 1. **Aviso del cambio de posición**, con el desglose de las 3 condiciones
-   en ese mismo mensaje:
+   en ese mismo bloque:
    - *Verde entra en la montaña* — cruce al alza de verde sobre media.
    - *Verde sale de la montaña* — cruce a la baja de verde bajo media.
-2. **Aviso adicional**, según cuántas de las 3 condiciones se cumplan:
+2. **Texto adicional**, según cuántas de las 3 condiciones se cumplan:
    - **3/3 → "CONFIRMADA"**: valor + Trend Speed Analyzer + ADX, las 3 a
      favor de la misma dirección del cambio.
    - **2/3 → "PARCIAL"**: solo 2 de las 3 (indica cuál falta).
-   - **0/3 o 1/3 → sin segundo mensaje** (solo queda el desglose del primero).
+   - **0/3 o 1/3 → sin texto adicional** (solo queda el desglose).
 
 Las 3 condiciones:
 - El valor de `verde` en el momento del cambio tiene 3 estados posibles:
@@ -99,12 +107,10 @@ Las 3 condiciones:
 
 ### Sistema 2: Bitman (COMPRAR / VENDER / ESPERAR)
 
-Un **segundo sistema de avisos totalmente independiente** (los mensajes de
-Telegram empiezan por "Bitman"), basado en un panel de trading que se
-compartió como referencia. En vez de un cambio de posición puntual, evalúa
-un **estado** y solo avisa cuando ese estado **cambia**. Sigue el criterio
-de 3 pasos descrito para leer las señales de ese panel -- tendencia,
-impulso, confirmación:
+Basado en un panel de trading que se compartió como referencia. En vez de
+un cambio de posición puntual, evalúa un **estado** y solo genera bloque
+cuando ese estado **cambia**. Sigue el criterio de 3 pasos descrito para
+leer las señales de ese panel -- tendencia, impulso, confirmación:
 
 - **COMPRAR**: **tendencia** alcista (AO, Awesome Oscillator 5/34) +
   **impulso** (ADX subiendo) + **confirmación** (Koncorde "todo el valor",
@@ -117,15 +123,11 @@ impulso, confirmación:
 El **BBWP** (volatilidad, 4º punto de ese criterio) es informativo en el
 panel original y no participa en la lógica COMPRAR/VENDER/ESPERAR -- por
 eso aquí tampoco se usa como condición que bloquea o cuenta, pero sí se
-incluye como **línea informativa** en cada mensaje de Bitman (percentil de
+incluye como **línea informativa** en cada bloque de Bitman (percentil de
 anchura de Bandas de Bollinger, clasificación idéntica a la del panel
 original, 5 niveles): **≤2%** extremo bajo, **<25%** baja/compresión,
 **<75%** media/normal, **<98%** alta (posible entrada tardía), **≥98%**
 extremo alto.
-
-Igual que en el sistema de cruces, cada mensaje termina con un resumen del
-veredicto actual de las otras 2 temporalidades (🟢 COMPRAR / 🔴 VENDER /
-⚪ ESPERAR).
 
 Es la versión "Base" de ese panel — no incluye el filtro solo-largo, el
 filtro de temporalidad superior encadenado (1h exige 4h y 1d alcistas a la
