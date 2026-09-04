@@ -240,45 +240,76 @@ def detectar_eventos(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def analizar(df: pd.DataFrame, ventana: int = VENTANA_VELAS) -> dict:
+HORIZONTE_VELAS = 24   # cuantas velas hacia adelante se mide el retorno (24 = 1 dia en 1h)
+
+
+def analizar(df: pd.DataFrame, ventana: int = VENTANA_VELAS) -> tuple:
     df = df.iloc[WARMUP_CANDLES:].reset_index(drop=True)
     df = detectar_eventos(df)
+    df["retorno_futuro_pct"] = (df["close"].shift(-HORIZONTE_VELAS) - df["close"]) / df["close"] * 100
 
     idx_tsa_flip = df.index[df["tsa_flip"]].tolist()
     idx_koncorde = set(df.index[df["koncorde_cruce"]].tolist())
     idx_bitman = set(df.index[df["bitman_cambio"]].tolist())
 
-    redundantes = 0
-    independientes = 0
+    idx_redundantes, idx_independientes = [], []
     for i in idx_tsa_flip:
         ventana_idx = range(max(0, i - ventana), min(len(df), i + ventana + 1))
         acompañado = any((j in idx_koncorde) or (j in idx_bitman) for j in ventana_idx)
-        if acompañado:
-            redundantes += 1
-        else:
-            independientes += 1
+        (idx_redundantes if acompañado else idx_independientes).append(i)
 
     total = len(idx_tsa_flip)
     dias_totales = (df["close_time"].iloc[-1] - df["close_time"].iloc[0]).total_seconds() / 86400
 
-    return {
+    resumen = {
         "total_flips_tsa": total,
-        "redundantes": redundantes,
-        "independientes": independientes,
-        "pct_redundante": round(redundantes / total * 100, 1) if total else 0,
-        "pct_independiente": round(independientes / total * 100, 1) if total else 0,
+        "redundantes": len(idx_redundantes),
+        "independientes": len(idx_independientes),
+        "pct_redundante": round(len(idx_redundantes) / total * 100, 1) if total else 0,
+        "pct_independiente": round(len(idx_independientes) / total * 100, 1) if total else 0,
         "flips_por_dia": round(total / dias_totales, 2) if dias_totales else 0,
         "dias_analizados": round(dias_totales, 0),
         "total_cruces_koncorde": len(idx_koncorde),
         "total_cambios_bitman": len(idx_bitman),
     }
+    return resumen, df, idx_independientes, idx_redundantes
 
 
-def guardar_informe(r: dict):
+def medir_retornos(df: pd.DataFrame, idx_list: list) -> dict:
+    """Retorno a favor de la direccion del flip (alcista=positivo,
+    bajista=negativo invertido), horizonte HORIZONTE_VELAS, con z-score
+    frente al 50% esperado por azar."""
+    filas = []
+    for i in idx_list:
+        if pd.isna(df.loc[i, "retorno_futuro_pct"]):
+            continue
+        alcista = bool(df.loc[i, "tsa_bullish"])
+        ret = df.loc[i, "retorno_futuro_pct"]
+        filas.append(ret if alcista else -ret)
+
+    n = len(filas)
+    if n == 0:
+        return {"n": 0, "pct_a_favor": None, "retorno_medio": None, "z": None}
+
+    aciertos = sum(1 for r in filas if r > 0)
+    p = aciertos / n
+    se = (0.5 * 0.5 / n) ** 0.5 if n > 0 else 0
+    z = (p - 0.5) / se if se > 0 else 0
+
+    return {
+        "n": n,
+        "pct_a_favor": round(p * 100, 1),
+        "retorno_medio": round(sum(filas) / n, 2),
+        "z": round(z, 2),
+    }
+
+
+def guardar_informe(r: dict, ret_indep: dict, ret_redun: dict):
     lineas = [
         f"# Independencia del Trend Speed Analyzer — {SYMBOL} {INTERVAL} (ultimos {YEARS_BACK} años)",
         "",
-        f"Ventana de 'cerca en el tiempo': +/- {VENTANA_VELAS} velas.",
+        f"Ventana de 'cerca en el tiempo': +/- {VENTANA_VELAS} velas. Horizonte de retorno: "
+        f"{HORIZONTE_VELAS} velas ({HORIZONTE_VELAS}h) tras el cambio de estado del TSA.",
         "",
         f"- Días analizados: **{r['dias_analizados']:.0f}**",
         f"- Cambios de estado del TSA: **{r['total_flips_tsa']}** ({r['flips_por_dia']}/día)",
@@ -290,11 +321,24 @@ def guardar_informe(r: dict):
         f"- **Independientes** (el TSA se mueve solo, sin nada cerca): "
         f"{r['independientes']} ({r['pct_independiente']}%)",
         "",
-        "_Si el % independiente es alto, avisar de los cambios del TSA aportaria señales "
-        "nuevas que ahora mismo no se ven. Si el % redundante es alto, casi siempre "
-        "coincidiria con un aviso que ya recibes por otra via, y no compensaria el ruido "
-        "extra. Ojo tambien al 'flips/dia': si es muy alto, aunque fuera independiente, "
-        "podria ser demasiado ruidoso para avisar en cada uno._",
+        "## ¿El precio se mueve a favor tras esos cambios?",
+        "",
+        "`z` = z-score frente al 50% esperado por azar (|z|>3 solido, |z|>2 sugerente, "
+        "por debajo indistinguible del azar).",
+        "",
+        "| Grupo | Nº eventos | % a favor | Retorno medio a favor | z |",
+        "|---|---|---|---|---|",
+        f"| Independientes | {ret_indep['n']} | {ret_indep['pct_a_favor']}% | "
+        f"{ret_indep['retorno_medio']}% | {ret_indep['z']} |",
+        f"| Redundantes | {ret_redun['n']} | {ret_redun['pct_a_favor']}% | "
+        f"{ret_redun['retorno_medio']}% | {ret_redun['z']} |",
+        "",
+        "_Si los 'Independientes' tienen z solido (>3) y mejor % que los 'Redundantes', "
+        "avisar de los cambios aislados del TSA aportaria valor real, no solo señales "
+        "distintas sino señales BUENAS. Si el z es bajo o negativo, los cambios "
+        "independientes no tienen ventaja demostrada -- confirmaria que no compensa "
+        "añadirlos como aviso, aunque sean tecnicamente independientes de los otros 2 "
+        "sistemas._",
     ]
     with open("analisis_tsa_independencia.md", "w") as f:
         f.write("\n".join(lineas))
@@ -310,8 +354,11 @@ def main():
     df = compute_adx(df)
     df = compute_veredicto(df)
     print("Analizando eventos...")
-    r = analizar(df)
-    guardar_informe(r)
+    r, df_analizado, idx_independientes, idx_redundantes = analizar(df)
+    print("Midiendo retornos futuros...")
+    ret_indep = medir_retornos(df_analizado, idx_independientes)
+    ret_redun = medir_retornos(df_analizado, idx_redundantes)
+    guardar_informe(r, ret_indep, ret_redun)
     print("\nListo: analisis_tsa_independencia.md generado.")
 
 
