@@ -541,7 +541,7 @@ def evaluar_condiciones_koncorde(vela, direccion: str) -> dict:
         rango_valor_txt = f"{VALOR_MIN_ALZA} a {VALOR_MAX_ALZA}"
         if VALOR_MIN_ALZA <= verde_val <= VALOR_MAX_ALZA:
             valor_estado = "dentro"
-        elif verde_val > VALOR_MAX_ALZA:
+        elif verde_val >= 0:
             valor_estado = "extendido"
         else:
             valor_estado = "contrario"
