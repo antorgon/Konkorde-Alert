@@ -405,27 +405,16 @@ def construir_bloque_bitman(df_ver: pd.DataFrame, interval: str, state: dict) ->
     resumen de otras temporalidades, que se añade una sola vez al final del
     mensaje combinado en main()) si hubo un cambio real que avisar, o None
     si no hay nada nuevo."""
-    if len(df_ver) < 2:
-        print(f"[{interval}][veredicto] Datos insuficientes, se omite esta pasada.")
+    resultado = detectar_transicion(
+        df_ver, state, f"last_veredicto_{interval}",
+        calcular_valor=lambda d: d.iloc[-1]["veredicto"],
+        log_prefix=f"[{interval}][veredicto]",
+    )
+    if resultado is None:
         return None
+    veredicto_actual, veredicto_previo = resultado
 
     ultima = df_ver.iloc[-1]
-    veredicto_actual = ultima["veredicto"]
-
-    state_key = f"last_veredicto_{interval}"
-    veredicto_previo = state.get(state_key)
-
-    if veredicto_previo == veredicto_actual:
-        print(f"[{interval}][veredicto] Sin cambio: sigue en {veredicto_actual}.")
-        return None
-
-    state[state_key] = veredicto_actual
-
-    if veredicto_previo is None:
-        # primera vez que se evalua esta temporalidad (arranque del ciclo):
-        # se guarda el veredicto base sin avisar, no es un cambio real
-        print(f"[{interval}][veredicto] Veredicto inicial registrado: {veredicto_actual}")
-        return None
 
     if veredicto_actual == "COMPRAR":
         motivo = _col("AO alcista") + " + ADX con impulso + Koncorde confirma acumulacion"
@@ -462,6 +451,36 @@ def load_state() -> dict:
 def save_state(state: dict):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f)
+
+
+def detectar_transicion(df: pd.DataFrame, state: dict, state_key: str, calcular_valor, log_prefix: str):
+    """Boilerplate compartido por los 2 sistemas (cruce y Bitman): comprueba
+    que hay datos suficientes, calcula el valor actual, lo compara contra
+    el ultimo guardado en 'state[state_key]', actualiza el estado in-place,
+    y distingue 'primera vez' de 'cambio real'.
+    Devuelve (valor_actual, valor_previo) si hay un cambio real que avisar,
+    o None si no hay que avisar (datos insuficientes, sin cambio, o es la
+    primera vez que se registra esta temporalidad)."""
+    if len(df) < 2:
+        print(f"{log_prefix} Datos insuficientes, se omite esta pasada.")
+        return None
+
+    valor_actual = calcular_valor(df)
+    valor_previo = state.get(state_key)
+
+    if valor_previo == valor_actual:
+        print(f"{log_prefix} Sin cambio: sigue en {valor_actual}.")
+        return None
+
+    state[state_key] = valor_actual
+
+    if valor_previo is None:
+        # primera vez que se evalua esta temporalidad (arranque del ciclo):
+        # se guarda el valor base sin avisar, no es un cambio real
+        print(f"{log_prefix} Valor inicial registrado: {valor_actual}")
+        return None
+
+    return valor_actual, valor_previo
 
 
 # --------------------------- TELEGRAM ---------------------------
@@ -609,28 +628,16 @@ def construir_bloque_cruce(df: pd.DataFrame, interval: str, state: dict) -> str 
     otras temporalidades, que se añade una sola vez al final del mensaje
     combinado en main()) -- si hubo un cambio real que avisar, o None si no
     hay nada nuevo."""
-    if len(df) < 2:
-        print(f"[{interval}] Datos insuficientes, se omite esta pasada.")
+    resultado = detectar_transicion(
+        df, state, f"last_live_pos_{interval}",
+        calcular_valor=lambda d: "alza" if d.iloc[-1]["verde"] > d.iloc[-1]["media"] else "baja",
+        log_prefix=f"[{interval}]",
+    )
+    if resultado is None:
         return None
+    direccion, _ = resultado
 
     ultima = df.iloc[-1]
-    direccion = "alza" if ultima["verde"] > ultima["media"] else "baja"
-
-    state_key_pos = f"last_live_pos_{interval}"
-    direccion_previa = state.get(state_key_pos)
-
-    if direccion_previa == direccion:
-        print(f"[{interval}] Sin cambio de posicion (sigue {direccion}).")
-        return None
-
-    state[state_key_pos] = direccion
-
-    if direccion_previa is None:
-        # primera vez que se evalua esta temporalidad (arranque del ciclo):
-        # se guarda la posicion base sin avisar, no es un cambio real
-        print(f"[{interval}] Posicion inicial registrada: {direccion}")
-        return None
-
     c = evaluar_condiciones_koncorde(ultima, direccion)
     verde_val, tsa_bullish, adx_val = c["verde_val"], c["tsa_bullish"], c["adx_val"]
     valor_estado = c["valor_estado"]
