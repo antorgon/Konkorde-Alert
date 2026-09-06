@@ -428,13 +428,13 @@ def construir_bloque_bitman(df_ver: pd.DataFrame, interval: str, state: dict) ->
 
     bloque = (
         f"Bitman {SYMBOL} {interval}\n"
-        f"{veredicto_previo} -> {veredicto_actual}\n"
+        f"{veredicto_previo} → {veredicto_actual}\n"
         f"{motivo}\n"
         f"AO: {ultima['ao']:.1f} ({_col(ultima['ao_estado'])})\n"
         f"Koncorde (todo el valor): {ultima['kon_val']:.1f}\n"
         f"ADX: {ultima['adx']:.1f}\n"
         f"{bbwp_texto(ultima['bbwp'])}\n"
-        f"Precio actual: {ultima['close']:.2f}"
+        f"<b>Precio actual: {ultima['close']:.2f}</b>"
     )
     print(bloque)
     return bloque
@@ -489,7 +489,11 @@ def send_telegram(message: str):
         print("[AVISO] Faltan TELEGRAM_TOKEN / TELEGRAM_CHAT_ID, no se envia mensaje.")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    r = _session.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": message}, timeout=10)
+    r = _session.post(
+        url,
+        json={"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"},
+        timeout=10,
+    )
     r.raise_for_status()
 
 
@@ -657,7 +661,7 @@ def construir_bloque_cruce(df: pd.DataFrame, interval: str, state: dict) -> str 
     partes = [
         f"Koncorde {SYMBOL} {interval}\n"
         f"{CROSS_DESC[direccion]}\n"
-        f"Precio actual: {ultima['close']:.2f}\n"
+        f"<b>Precio actual: {ultima['close']:.2f}</b>\n"
         f"{desglose}"
     ]
 
