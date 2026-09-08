@@ -186,9 +186,9 @@ def compute_koncorde(df: pd.DataFrame, m: int = 15) -> pd.DataFrame:
 # Replica fiel del indicador "Trend Speed Analyzer (Zeiierman)" (codigo Pine
 # abierto, licencia CC BY-NC-SA 4.0), usado como confirmacion de tendencia:
 # verde/alcista cuando wma(close,2) > dyn_ema, rojo/bajista en caso contrario.
-TSA_MAX_LENGTH = 118       # 'Maximum Length' -- ajustado a la config real del indicador
+TSA_MAX_LENGTH = 150       # 'Maximum Length' -- ajustado a la config real del indicador
                            # en el grafico del usuario (no es el valor por defecto, que es 50)
-TSA_ACCEL_MULT = 2.8       # 'Accelerator Multiplier' -- idem, valor por defecto es 5.0
+TSA_ACCEL_MULT = 5.0       # 'Accelerator Multiplier' -- idem, coincide con el valor por defecto
 
 
 def _wma(series: pd.Series, length: int) -> pd.Series:
@@ -427,8 +427,8 @@ def construir_bloque_bitman(df_ver: pd.DataFrame, interval: str, state: dict) ->
         motivo = _col(motivo_espera(fila))
 
     bloque = (
-        f"Bitman {SYMBOL} {interval}\n"
-        f"{veredicto_previo} → {veredicto_actual}\n"
+        f"<b>Bitman {SYMBOL} {interval}</b>\n"
+        f"<b>{veredicto_previo} → {veredicto_actual}</b>\n"
         f"{motivo}\n"
         f"AO: {ultima['ao']:.1f} ({_col(ultima['ao_estado'])})\n"
         f"Koncorde (todo el valor): {ultima['kon_val']:.1f}\n"
@@ -616,7 +616,7 @@ def resumen_temporalidades(interval_actual: str, df_actual: pd.DataFrame, df_ver
     lineas = [f"{_linea_temporalidad(interval_actual, df_actual, df_ver_actual)} (esta)"]
     for iv in otros_dfs:
         lineas.append(_linea_temporalidad(iv, otros_dfs[iv], otros_ver.get(iv)))
-    return "Temporalidades:\n" + "\n".join(lineas)
+    return "<b>Temporalidades:</b>\n" + "\n".join(lineas)
 
 
 def construir_bloque_cruce(df: pd.DataFrame, interval: str, state: dict) -> str | None:
@@ -659,14 +659,14 @@ def construir_bloque_cruce(df: pd.DataFrame, interval: str, state: dict) -> str 
 
     # --- Cruce (siempre) + confirmacion TOTAL (3/3) o PARCIAL (2/3) fusionados ---
     partes = [
-        f"Koncorde {SYMBOL} {interval}\n"
-        f"{CROSS_DESC[direccion]}\n"
+        f"<b>Koncorde {SYMBOL} {interval}</b>\n"
+        f"<b>{CROSS_DESC[direccion]}</b>\n"
         f"<b>Precio actual: {ultima['close']:.2f}</b>\n"
         f"{desglose}"
     ]
 
     if n_ok == 3:
-        partes.append(CONFIRMED_DESC[direccion])
+        partes.append(f"<b>{CONFIRMED_DESC[direccion]}</b>")
     elif n_ok == 2:
         if not valor_ok:
             fallo = "valor (" + TEXTO_VALOR[valor_estado] + ")"
@@ -674,7 +674,7 @@ def construir_bloque_cruce(df: pd.DataFrame, interval: str, state: dict) -> str 
             fallo = "Trend Speed Analyzer"
         else:
             fallo = "ADX"
-        partes.append(f"{PARTIAL_DESC[direccion]}\nFalta: {fallo}")
+        partes.append(f"<b>{PARTIAL_DESC[direccion]}</b>\nFalta: {fallo}")
     else:
         print(
             f"[{interval}] Solo {n_ok}/3 condiciones cumplidas "
