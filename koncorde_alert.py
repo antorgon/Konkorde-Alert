@@ -95,10 +95,33 @@ _session = requests.Session()
 
 # --------------------------- DATOS DE MERCADO ---------------------------
 def get_klines(symbol=SYMBOL, interval=INTERVAL, limit=LOOKBACK) -> pd.DataFrame:
-    params = {"symbol": symbol, "interval": interval, "limit": limit}
-    resp = _session.get(BINANCE_KLINES_URL, params=params, timeout=15)
-    resp.raise_for_status()
-    raw = resp.json()
+    if limit <= 1000:
+        params = {"symbol": symbol, "interval": interval, "limit": limit}
+        resp = _session.get(BINANCE_KLINES_URL, params=params, timeout=15)
+        resp.raise_for_status()
+        raw = resp.json()
+    else:
+        # Binance limita cada peticion a 1000 velas -- para pedir mas (el ML
+        # RSI necesita hasta 3000) hay que encadenar varias yendo hacia
+        # atras en el tiempo con 'endTime'.
+        raw = []
+        end_time = None
+        restante = limit
+        while restante > 0:
+            lote = min(restante, 1000)
+            params = {"symbol": symbol, "interval": interval, "limit": lote}
+            if end_time is not None:
+                params["endTime"] = end_time
+            resp = _session.get(BINANCE_KLINES_URL, params=params, timeout=15)
+            resp.raise_for_status()
+            chunk = resp.json()
+            if not chunk:
+                break
+            raw = chunk + raw
+            end_time = chunk[0][0] - 1  # open_time de la primera vela del lote, menos 1ms
+            restante -= len(chunk)
+            if len(chunk) < lote:
+                break
 
     df = pd.DataFrame(raw, columns=[
         "open_time", "open", "high", "low", "close", "volume",
@@ -116,6 +139,17 @@ def _rsi(series: pd.Series, length: int = 14) -> pd.Series:
     delta = series.diff()
     gain = delta.clip(lower=0).rolling(length).mean()
     loss = (-delta.clip(upper=0)).rolling(length).mean()
+    rs = gain / loss.replace(0, 1e-12)
+    return 100 - (100 / (1 + rs))
+
+
+def _rsi_wilder(series: pd.Series, length: int) -> pd.Series:
+    """RSI con suavizado de Wilder, replica exacta de ta.rsi de Pine
+    (distinto del _rsi() de arriba, que usa media simple y solo se usa
+    como componente interno del Koncorde)."""
+    delta = series.diff()
+    gain = delta.clip(lower=0).ewm(alpha=1 / length, adjust=False).mean()
+    loss = (-delta.clip(upper=0)).ewm(alpha=1 / length, adjust=False).mean()
     rs = gain / loss.replace(0, 1e-12)
     return 100 - (100 / (1 + rs))
 
@@ -358,6 +392,112 @@ def bbwp_texto(bbwp_val: float) -> str:
         return f"BBWP: {bbwp_val:.0f}% (extremo alto -- volatilidad extrema, alto riesgo de entrada muy tardia)"
 
 
+# --------------------------- SISTEMA 3: ML RSI (BackQuant) ---------------------------
+# Replica fiel del Pine Script "Machine Learning RSI [BackQuant]" compartido
+# por el usuario. RSI(27) sobre el MINIMO (no el cierre), suavizado con
+# SMA(4), y 3 centroides ajustados por k-means 1D (semilla en los
+# percentiles 25/50/75 de los ultimos 3000 valores de RSI) que definen
+# umbrales de compra/venta que se adaptan con el tiempo, en vez de un
+# 70/30 fijo. NUNCA validado con datos historicos por este proyecto -- se
+# implementa a peticion expresa del usuario, sin el analisis de
+# independencia/rendimiento que se le ofrecio antes de añadirlo (a
+# diferencia del Koncorde o el TSA en su momento).
+#
+# Nota: 'Threshold Range Min/Max/Step' y 'Performance Memory' son inputs
+# del indicador original que aparecen en el panel pero que el propio Pine
+# no usa en ningun calculo (arrays declarados y nunca leidos) -- por eso
+# no afectan a esta replica tampoco, es fiel al comportamiento real.
+ML_RSI_LENGTH = 27
+ML_RSI_SMOOTH_PERIOD = 4
+ML_RSI_MAX_DATA = 3000    # 'Max Data Points'
+ML_RSI_MAX_ITER = 2000    # 'Max Clustering Steps'
+
+
+def _kmeans_1d_3(values: np.ndarray, max_iter: int = ML_RSI_MAX_ITER):
+    """K-means 1D con 3 centroides, semilla en percentiles 25/50/75,
+    replica exacta del bucle del Pine (SIN ordenar los centroides
+    despues, igual que el original -- en la practica mantienen el orden
+    ascendente porque la semilla ya viene ordenada)."""
+    if len(values) < 4:
+        return None
+    centroids = np.percentile(values, [25, 50, 75])
+    for _ in range(max_iter):
+        dist = np.abs(values[:, None] - centroids[None, :])
+        idx = np.argmin(dist, axis=1)
+        nuevos = np.array([
+            values[idx == k].mean() if np.any(idx == k) else centroids[k]
+            for k in range(3)
+        ])
+        if np.array_equal(nuevos, centroids):
+            break
+        centroids = nuevos
+    return centroids
+
+
+def compute_ml_rsi(df: pd.DataFrame, length: int = ML_RSI_LENGTH, smooth_period: int = ML_RSI_SMOOTH_PERIOD,
+                    max_data: int = ML_RSI_MAX_DATA, max_iter: int = ML_RSI_MAX_ITER) -> pd.DataFrame:
+    df = df.copy()
+    rsi = _rsi(df["low"], length)  # 'Calculation Source' = Minimo
+    rsi = rsi.rolling(smooth_period).mean()  # 'Smooth RSI', SMA(4)
+    df["ml_rsi"] = rsi
+
+    rsi_arr = rsi.to_numpy()
+    ventana = rsi_arr[-max_data:]
+    ventana = ventana[~np.isnan(ventana)]
+
+    centroids = _kmeans_1d_3(ventana, max_iter)
+    if centroids is None:
+        df["ml_long_s"], df["ml_short_s"], df["ml_señal"] = np.nan, np.nan, None
+        return df
+
+    long_s, short_s = centroids[2], centroids[0]
+    ultimo_rsi = rsi_arr[-1]
+    if pd.isna(ultimo_rsi):
+        señal = None
+    elif ultimo_rsi > long_s:
+        señal = "verde"
+    elif ultimo_rsi < short_s:
+        señal = "rojo"
+    else:
+        señal = "gris"
+
+    df["ml_long_s"] = long_s
+    df["ml_short_s"] = short_s
+    df["ml_señal"] = señal
+    return df
+
+
+def construir_bloque_ml_rsi(df_ml: pd.DataFrame, interval: str, state: dict) -> str | None:
+    """Avisa en el instante en que la señal del ML RSI cambia (verde <->
+    rojo <-> gris), mirando la vela EN CURSO -- mismo criterio que los
+    otros 2 sistemas."""
+    if len(df_ml) < 1:
+        return None
+
+    ultima = df_ml.iloc[-1]
+    señal_actual = ultima["ml_señal"]
+    if señal_actual is None:
+        return None
+
+    cambio, señal_previa = detectar_transicion(
+        df_ml, state, f"last_ml_rsi_{interval}", lambda d: d.iloc[-1]["ml_señal"], f"[{interval}][ML RSI]"
+    )
+    if not cambio:
+        return None
+
+    texto_señal = {"verde": "alcista", "rojo": "bajista", "gris": "neutral"}[señal_actual]
+    texto_previo = {"verde": "alcista", "rojo": "bajista", "gris": "neutral"}.get(señal_previa, señal_previa)
+
+    return (
+        f"<b>ML RSI {SYMBOL} {interval}</b>\n"
+        f"<b>{_col(texto_previo)} → {_col(texto_señal)}</b>\n"
+        f"RSI: {ultima['ml_rsi']:.1f}\n"
+        f"Umbral compra (dinamico): {ultima['ml_long_s']:.1f}\n"
+        f"Umbral venta (dinamico): {ultima['ml_short_s']:.1f}\n"
+        f"<b>Precio actual: {ultima['close']:.2f}</b>"
+    )
+
+
 def compute_veredicto(df: pd.DataFrame) -> pd.DataFrame:
     """Requiere que el df ya tenga 'verde', 'marron' (de compute_koncorde) y
     'adx' (de compute_adx) calculados. Añade 'kon_val' (criterio Bitman:
@@ -392,6 +532,124 @@ def motivo_espera(row) -> str:
     if row["ao_estado"] == "bajista" and not row["kon_val"] < 0:
         return "AO bajista pero Koncorde aun no confirma"
     return "Señales sin alineacion clara"
+
+
+# --------------------------- SISTEMA 3: ML RSI (BackQuant) ---------------------------
+# Replica fiel de "Machine Learning RSI [BackQuant]" (codigo Pine v5,
+# licencia MPL 2.0). RSI(27) sobre el precio MINIMO (no el cierre),
+# suavizado con SMA(4), con umbrales dinamicos de compra/venta ajustados
+# por k-means 1D (3 grupos, semilla en percentiles 25/50/75 de los ultimos
+# 3000 valores de RSI). Parametros tomados literalmente de la
+# configuracion real del indicador (captura del usuario), no de los
+# valores por defecto del script (que son distintos: RSI sobre 'close',
+# longitud 14, MA tipo EMA).
+#
+# NOTA IMPORTANTE: a diferencia del Trend Speed Analyzer o el ADX, esto
+# nunca se ha validado empiricamente (ni fidelidad de formula probada con
+# datos historicos, ni si sus señales aciertan mas que el azar). Se añade
+# directamente por decision explicita del usuario, no por haber pasado el
+# mismo proceso de validacion que el resto del sistema.
+ML_RSI_LENGTH = 27
+ML_RSI_SMOOTH_PERIOD = 4
+ML_RSI_MAX_DATA = 3000
+ML_RSI_MAX_ITER = 2000
+
+
+def _kmeans_1d_3(values: np.ndarray, max_iter: int = ML_RSI_MAX_ITER) -> np.ndarray | None:
+    """Replica exacta del bucle de k-means 1D del Pine: semilla en
+    percentiles 25/50/75, reasignacion + recalculo de medias hasta
+    converger o agotar max_iter. Devuelve los 3 centroides SIN ordenar
+    (igual que el original, que no los ordena -- en la practica mantienen
+    el orden ascendente porque la semilla ya viene ordenada)."""
+    if len(values) < 4:
+        return None
+    centroids = np.percentile(values, [25, 50, 75])
+    for _ in range(max_iter):
+        dist = np.abs(values[:, None] - centroids[None, :])
+        idx = np.argmin(dist, axis=1)
+        nuevos = np.array([
+            values[idx == k].mean() if np.any(idx == k) else centroids[k]
+            for k in range(3)
+        ])
+        if np.array_equal(nuevos, centroids):
+            break
+        centroids = nuevos
+    return centroids
+
+
+def _rsi_wilder(series: pd.Series, length: int) -> pd.Series:
+    """RSI con suavizado de Wilder (ta.rsi de Pine)."""
+    delta = series.diff()
+    gain = delta.clip(lower=0).ewm(alpha=1 / length, adjust=False).mean()
+    loss = (-delta.clip(upper=0)).ewm(alpha=1 / length, adjust=False).mean()
+    rs = gain / loss.replace(0, 1e-12)
+    return 100 - (100 / (1 + rs))
+
+
+def compute_ml_rsi(df: pd.DataFrame, rsi_length: int = ML_RSI_LENGTH,
+                    smooth_period: int = ML_RSI_SMOOTH_PERIOD,
+                    max_data: int = ML_RSI_MAX_DATA, max_iter: int = ML_RSI_MAX_ITER) -> pd.DataFrame:
+    df = df.copy()
+    rsi = _rsi_wilder(df["low"], rsi_length)  # Calculation Source = Minimo
+    rsi = rsi.rolling(smooth_period).mean()   # Smooth RSI, SMA(4)
+    df["ml_rsi"] = rsi
+
+    # Solo hace falta clasificar la vela EN CURSO (iloc[-1]) para el
+    # sistema de avisos en vivo -- no hace falta reclusterizar bar a bar
+    # como en un backtest, ahorra muchisimo calculo en produccion.
+    rsi_arr = rsi.to_numpy()
+    ventana = rsi_arr[-max_data:]
+    ventana = ventana[~np.isnan(ventana)]
+
+    df["ml_long_s"] = np.nan
+    df["ml_short_s"] = np.nan
+    df["ml_señal"] = None
+
+    if len(ventana) < 4 or np.isnan(rsi_arr[-1]):
+        return df
+
+    centroids = _kmeans_1d_3(ventana, max_iter)
+    short_s, long_s = centroids[0], centroids[2]
+
+    ultimo_rsi = rsi_arr[-1]
+    if ultimo_rsi > long_s:
+        señal = "verde"
+    elif ultimo_rsi < short_s:
+        señal = "rojo"
+    else:
+        señal = "gris"
+
+    df.iloc[-1, df.columns.get_loc("ml_long_s")] = long_s
+    df.iloc[-1, df.columns.get_loc("ml_short_s")] = short_s
+    df.iloc[-1, df.columns.get_loc("ml_señal")] = señal
+    return df
+
+
+def construir_bloque_mlrsi(df_ml: pd.DataFrame, interval: str, state: dict) -> str | None:
+    """Avisa cuando la señal del ML RSI cambia (verde=compra, rojo=venta,
+    gris=neutral). Mira la vela EN CURSO, igual que los otros 2 sistemas."""
+    resultado = detectar_transicion(
+        df_ml, state, f"last_mlrsi_{interval}",
+        calcular_valor=lambda d: d.iloc[-1]["ml_señal"],
+        log_prefix=f"[{interval}][ml_rsi]",
+    )
+    if resultado is None:
+        return None
+    señal_actual, señal_previa = resultado
+
+    ultima = df_ml.iloc[-1]
+    texto_map = {"verde": "🟢 verde", "rojo": "🔴 rojo", "gris": "⚪ gris"}
+    texto_señal = texto_map.get(señal_actual, señal_actual)
+    texto_previo = texto_map.get(señal_previa, señal_previa)
+
+    return (
+        f"<b>ML RSI {SYMBOL} {interval}</b>\n"
+        f"<b>{texto_previo} → {texto_señal}</b>\n"
+        f"RSI(27, mínimo, SMA4): {ultima['ml_rsi']:.1f}\n"
+        f"Umbral compra (largo): {ultima['ml_long_s']:.1f}\n"
+        f"Umbral venta (corto): {ultima['ml_short_s']:.1f}\n"
+        f"<b>Precio actual: {ultima['close']:.2f}</b>"
+    )
 
 
 def construir_bloque_bitman(df_ver: pd.DataFrame, interval: str, state: dict) -> str | None:
@@ -591,31 +849,38 @@ def evaluar_condiciones_koncorde(vela, direccion: str) -> dict:
     }
 
 
-def _linea_temporalidad(iv: str, df: pd.DataFrame, df_ver: pd.DataFrame | None) -> str:
-    """Construye la linea de resumen (Koncorde + Bitman) para una
+def _linea_temporalidad(iv: str, df: pd.DataFrame, df_ver: pd.DataFrame | None,
+                         df_ml: pd.DataFrame | None) -> str:
+    """Construye la linea de resumen (Koncorde + Bitman + ML RSI) para una
     temporalidad dada, a partir de sus datos ya calculados."""
     ult = df.iloc[-1]
     direccion_actual = "alza" if ult["verde"] > ult["media"] else "baja"
     c = evaluar_condiciones_koncorde(ult, direccion_actual)
-    koncorde_txt = _col("alcista" if direccion_actual == "alza" else "bajista") + f" {c['n_ok']}/3"
+    koncorde_txt = "<b>" + _col("alcista" if direccion_actual == "alza" else "bajista") + f" {c['n_ok']}/3</b>"
 
     bitman_txt = ""
     if df_ver is not None:
         v = df_ver.iloc[-1]["veredicto"]
         icono = "🟢" if v == "COMPRAR" else "🔴" if v == "VENDER" else "⚪"
-        bitman_txt = f" · Bitman {icono} {v}"
+        bitman_txt = f" · Bitman <b>{icono} {v}</b>"
 
-    return f"{iv}: Koncorde {koncorde_txt}{bitman_txt}"
+    mlrsi_txt = ""
+    if df_ml is not None and df_ml.iloc[-1]["ml_señal"] is not None:
+        s = df_ml.iloc[-1]["ml_señal"]
+        icono = "🟢" if s == "verde" else "🔴" if s == "rojo" else "⚪"
+        mlrsi_txt = f" · ML RSI <b>{icono} {s}</b>"
+
+    return f"{iv}: Koncorde {koncorde_txt}{bitman_txt}{mlrsi_txt}"
 
 
 def resumen_temporalidades(interval_actual: str, df_actual: pd.DataFrame, df_ver_actual: pd.DataFrame,
-                            otros_dfs: dict, otros_ver: dict) -> str:
+                            df_ml_actual: pd.DataFrame, otros_dfs: dict, otros_ver: dict, otros_ml: dict) -> str:
     """Una linea por CADA temporalidad (la actual, marcada, y las otras 2),
-    combinando el estado EN VIVO de los 2 sistemas: posicion + condiciones
-    del Koncorde, y el veredicto de Bitman."""
-    lineas = [f"{_linea_temporalidad(interval_actual, df_actual, df_ver_actual)} (esta)"]
+    combinando el estado EN VIVO de los 3 sistemas: posicion + condiciones
+    del Koncorde, el veredicto de Bitman, y la señal del ML RSI."""
+    lineas = [f"{_linea_temporalidad(interval_actual, df_actual, df_ver_actual, df_ml_actual)} (esta)"]
     for iv in otros_dfs:
-        lineas.append(_linea_temporalidad(iv, otros_dfs[iv], otros_ver.get(iv)))
+        lineas.append(_linea_temporalidad(iv, otros_dfs[iv], otros_ver.get(iv), otros_ml.get(iv)))
     return "<b>Temporalidades:</b>\n" + "\n".join(lineas)
 
 
@@ -695,6 +960,7 @@ def main():
     # temporalidades al final. ---
     dfs = {}
     dfs_ver = {}
+    dfs_ml = {}
     for interval in INTERVALS:
         try:
             df = get_klines(interval=interval)
@@ -703,19 +969,21 @@ def main():
             df = compute_adx(df)
             dfs[interval] = df
             dfs_ver[interval] = compute_veredicto(df)
+            dfs_ml[interval] = compute_ml_rsi(df)
         except Exception as e:
             print(f"[{interval}] [ERROR] {e}")
 
-    # --- Paso 2: revisar cada temporalidad. Si el cruce y/o Bitman tienen
-    # algo nuevo que avisar en esta misma pasada, se fusiona todo en UN
-    # SOLO mensaje de Telegram por temporalidad (en vez de uno por cada
-    # pieza), con el resumen de las otras 2 temporalidades una unica vez
-    # al final. ---
+    # --- Paso 2: revisar cada temporalidad. Si el cruce, Bitman y/o el ML
+    # RSI tienen algo nuevo que avisar en esta misma pasada, se fusiona todo
+    # en UN SOLO mensaje de Telegram por temporalidad (en vez de uno por
+    # cada pieza), con el resumen de las otras 2 temporalidades una unica
+    # vez al final. ---
     for interval in INTERVALS:
         if interval not in dfs:
             continue
         otros_dfs = {iv: dfs[iv] for iv in INTERVALS if iv != interval and iv in dfs}
         otros_ver = {iv: dfs_ver[iv] for iv in INTERVALS if iv != interval and iv in dfs_ver}
+        otros_ml = {iv: dfs_ml[iv] for iv in INTERVALS if iv != interval and iv in dfs_ml}
 
         bloque_cruce = None
         try:
@@ -732,10 +1000,20 @@ def main():
             except Exception as e:
                 print(f"[{interval}][veredicto] [ERROR] {e}")
 
-        bloques = [b for b in (bloque_cruce, bloque_bitman) if b is not None]
+        bloque_mlrsi = None
+        if interval in dfs_ml:
+            try:
+                bloque_mlrsi = construir_bloque_mlrsi(dfs_ml[interval], interval, state)
+            except Exception as e:
+                print(f"[{interval}][ml_rsi] [ERROR] {e}")
+
+        bloques = [b for b in (bloque_cruce, bloque_bitman, bloque_mlrsi) if b is not None]
         if bloques:
-            resumen = resumen_temporalidades(interval, dfs[interval], dfs_ver.get(interval), otros_dfs, otros_ver)
-            msg = "\n\n".join(bloques) + f"\n\n{resumen}"
+            resumen = resumen_temporalidades(
+                interval, dfs[interval], dfs_ver.get(interval), dfs_ml.get(interval),
+                otros_dfs, otros_ver, otros_ml,
+            )
+            msg = "\n\n".join(bloques) + f"\n{resumen}"
             send_telegram(msg)
 
     # Se guarda siempre (no solo cuando hay mensaje): construir_bloque_*
