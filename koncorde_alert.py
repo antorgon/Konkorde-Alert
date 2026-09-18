@@ -220,9 +220,9 @@ def compute_koncorde(df: pd.DataFrame, m: int = 15) -> pd.DataFrame:
 # Replica fiel del indicador "Trend Speed Analyzer (Zeiierman)" (codigo Pine
 # abierto, licencia CC BY-NC-SA 4.0), usado como confirmacion de tendencia:
 # verde/alcista cuando wma(close,2) > dyn_ema, rojo/bajista en caso contrario.
-TSA_MAX_LENGTH = 150       # 'Maximum Length' -- ajustado a la config real del indicador
+TSA_MAX_LENGTH = 118       # 'Maximum Length' -- ajustado a la config real del indicador
                            # en el grafico del usuario (no es el valor por defecto, que es 50)
-TSA_ACCEL_MULT = 5.0       # 'Accelerator Multiplier' -- idem, coincide con el valor por defecto
+TSA_ACCEL_MULT = 2.8       # 'Accelerator Multiplier' -- idem, valor por defecto es 5.0
 
 
 def _wma(series: pd.Series, length: int) -> pd.Series:
@@ -555,6 +555,15 @@ ML_RSI_MAX_DATA = 3000
 ML_RSI_MAX_ITER = 2000
 
 
+def _rsi_wilder(series: pd.Series, length: int) -> pd.Series:
+    """RSI con suavizado de Wilder (ta.rsi de Pine)."""
+    delta = series.diff()
+    gain = delta.clip(lower=0).ewm(alpha=1 / length, adjust=False).mean()
+    loss = (-delta.clip(upper=0)).ewm(alpha=1 / length, adjust=False).mean()
+    rs = gain / loss.replace(0, 1e-12)
+    return 100 - (100 / (1 + rs))
+
+
 def _kmeans_1d_3(values: np.ndarray, max_iter: int = ML_RSI_MAX_ITER) -> np.ndarray | None:
     """Replica exacta del bucle de k-means 1D del Pine: semilla en
     percentiles 25/50/75, reasignacion + recalculo de medias hasta
@@ -756,7 +765,7 @@ def send_telegram(message: str):
 
 
 # --------------------------- MAIN (revisa varias temporalidades) ---------------------------
-INTERVALS = ["1h", "4h", "1d"]  # temporalidades revisadas en cada pasada
+INTERVALS = ["1h", "1d"]  # temporalidades revisadas en cada pasada
 
 CROSS_DESC = {
     "alza": "Verde entra en la montaña (cruce al alza sobre media)",
