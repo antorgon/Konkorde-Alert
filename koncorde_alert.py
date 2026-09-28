@@ -5,29 +5,30 @@ Se ejecuta repetidamente (cada 5 min) dentro del bucle del workflow de
 GitHub Actions (.github/workflows/koncorde.yml), que se auto-relanza cada
 ~5h40m para funcionar de forma indefinida. Cada ejecucion de este script:
 
-  1. Descarga velas de Binance para 1h, 4h y 1d (incluida la vela EN CURSO,
+  1. Descarga velas de Binance para 1h y 1d (incluida la vela EN CURSO,
      todavia sin cerrar, que Binance sigue actualizando en vivo)
   2. Calcula el Koncorde (verde, marron, azul, media), el Trend Speed
      Analyzer (dyn_ema, tsa_bullish), el ADX (fuerza de tendencia), el AO,
      el BBWP y el veredicto Bitman para cada temporalidad
-  3. Revisa 2 sistemas de aviso independientes, AMBOS sobre la vela EN
+  3. Revisa 3 sistemas de aviso independientes, TODOS sobre la vela EN
      CURSO (no esperan al cierre, para notificar en el instante en que se
      produce el cambio, replicando el comportamiento "Una vez por barra"
      de la alerta original de TradingView):
      - Cruces (con desglose de 3 condiciones validadas con datos
        historicos: valor, Trend Speed Analyzer, ADX)
      - Bitman (COMPRAR/VENDER/ESPERAR)
+     - ML RSI (verde/rojo/gris)
   4. Manda por Telegram el aviso correspondiente (fusionando cruce y
      Bitman en un unico mensaje si ambos tienen algo nuevo en la misma
      pasada), incluyendo al final un resumen del estado EN VIVO de las
-     3 temporalidades (la actual, marcada, y las otras 2)
+     temporalidades configuradas
   5. Guarda en state.json la ultima posicion/veredicto conocido de cada
      temporalidad, para avisar solo en los cambios reales
 
 IMPORTANTE -- esto puede repintarse: al evaluar la vela todavia en
 formacion (no cerrada), un cruce o un cambio de veredicto puede aparecer y
 revertirse varias veces antes de que la vela termine, generando avisos que
-se contradicen entre si dentro de la misma hora/4h/dia. Es una decision
+se contradicen entre si dentro de la misma hora/dia. Es una decision
 deliberada (prioriza la inmediatez sobre la limpieza de la señal), no un
 fallo.
 
@@ -57,13 +58,14 @@ bot, asi que "alcista"/"bajista" se marcan con 🟢/🔴 como sustituto.
 import os
 import json
 import sys
+import tempfile
+from pathlib import Path
 
 import requests
 import pandas as pd
 import numpy as np
 
 SYMBOL = "BTCUSDT"
-INTERVAL = "1h"
 LOOKBACK = 400
 STATE_FILE = "state.json"
 
@@ -94,7 +96,7 @@ _session = requests.Session()
 
 
 # --------------------------- DATOS DE MERCADO ---------------------------
-def get_klines(symbol=SYMBOL, interval=INTERVAL, limit=LOOKBACK) -> pd.DataFrame:
+def get_klines(symbol=SYMBOL, interval="1h", limit=LOOKBACK) -> pd.DataFrame:
     if limit <= 1000:
         params = {"symbol": symbol, "interval": interval, "limit": limit}
         resp = _session.get(BINANCE_KLINES_URL, params=params, timeout=15)
@@ -327,7 +329,7 @@ def compute_adx(df: pd.DataFrame, di_length: int = ADX_DI_LENGTH,
 # Nota: aqui se implementa la version "Base" del panel (sin el filtro
 # solo-largo ni el filtro de temporalidad superior de la version "Pro", ni
 # el modelo de asignacion de capital) para mantener el alcance similar al
-# resto del sistema, que ya revisa 1h/4h/1d de forma independiente.
+# resto del sistema, que ya revisa 1h/1d de forma independiente.
 
 
 def compute_ao(df: pd.DataFrame) -> pd.DataFrame:
@@ -392,148 +394,8 @@ def bbwp_texto(bbwp_val: float) -> str:
         return f"BBWP: {bbwp_val:.0f}% (extremo alto -- volatilidad extrema, alto riesgo de entrada muy tardia)"
 
 
+
 # --------------------------- SISTEMA 3: ML RSI (BackQuant) ---------------------------
-# Replica fiel del Pine Script "Machine Learning RSI [BackQuant]" compartido
-# por el usuario. RSI(27) sobre el MINIMO (no el cierre), suavizado con
-# SMA(4), y 3 centroides ajustados por k-means 1D (semilla en los
-# percentiles 25/50/75 de los ultimos 3000 valores de RSI) que definen
-# umbrales de compra/venta que se adaptan con el tiempo, en vez de un
-# 70/30 fijo. NUNCA validado con datos historicos por este proyecto -- se
-# implementa a peticion expresa del usuario, sin el analisis de
-# independencia/rendimiento que se le ofrecio antes de añadirlo (a
-# diferencia del Koncorde o el TSA en su momento).
-#
-# Nota: 'Threshold Range Min/Max/Step' y 'Performance Memory' son inputs
-# del indicador original que aparecen en el panel pero que el propio Pine
-# no usa en ningun calculo (arrays declarados y nunca leidos) -- por eso
-# no afectan a esta replica tampoco, es fiel al comportamiento real.
-ML_RSI_LENGTH = 27
-ML_RSI_SMOOTH_PERIOD = 4
-ML_RSI_MAX_DATA = 3000    # 'Max Data Points'
-ML_RSI_MAX_ITER = 2000    # 'Max Clustering Steps'
-
-
-def _kmeans_1d_3(values: np.ndarray, max_iter: int = ML_RSI_MAX_ITER):
-    """K-means 1D con 3 centroides, semilla en percentiles 25/50/75,
-    replica exacta del bucle del Pine (SIN ordenar los centroides
-    despues, igual que el original -- en la practica mantienen el orden
-    ascendente porque la semilla ya viene ordenada)."""
-    if len(values) < 4:
-        return None
-    centroids = np.percentile(values, [25, 50, 75])
-    for _ in range(max_iter):
-        dist = np.abs(values[:, None] - centroids[None, :])
-        idx = np.argmin(dist, axis=1)
-        nuevos = np.array([
-            values[idx == k].mean() if np.any(idx == k) else centroids[k]
-            for k in range(3)
-        ])
-        if np.array_equal(nuevos, centroids):
-            break
-        centroids = nuevos
-    return centroids
-
-
-def compute_ml_rsi(df: pd.DataFrame, length: int = ML_RSI_LENGTH, smooth_period: int = ML_RSI_SMOOTH_PERIOD,
-                    max_data: int = ML_RSI_MAX_DATA, max_iter: int = ML_RSI_MAX_ITER) -> pd.DataFrame:
-    df = df.copy()
-    rsi = _rsi(df["low"], length)  # 'Calculation Source' = Minimo
-    rsi = rsi.rolling(smooth_period).mean()  # 'Smooth RSI', SMA(4)
-    df["ml_rsi"] = rsi
-
-    rsi_arr = rsi.to_numpy()
-    ventana = rsi_arr[-max_data:]
-    ventana = ventana[~np.isnan(ventana)]
-
-    centroids = _kmeans_1d_3(ventana, max_iter)
-    if centroids is None:
-        df["ml_long_s"], df["ml_short_s"], df["ml_señal"] = np.nan, np.nan, None
-        return df
-
-    long_s, short_s = centroids[2], centroids[0]
-    ultimo_rsi = rsi_arr[-1]
-    if pd.isna(ultimo_rsi):
-        señal = None
-    elif ultimo_rsi > long_s:
-        señal = "verde"
-    elif ultimo_rsi < short_s:
-        señal = "rojo"
-    else:
-        señal = "gris"
-
-    df["ml_long_s"] = long_s
-    df["ml_short_s"] = short_s
-    df["ml_señal"] = señal
-    return df
-
-
-def construir_bloque_ml_rsi(df_ml: pd.DataFrame, interval: str, state: dict) -> str | None:
-    """Avisa en el instante en que la señal del ML RSI cambia (verde <->
-    rojo <-> gris), mirando la vela EN CURSO -- mismo criterio que los
-    otros 2 sistemas."""
-    if len(df_ml) < 1:
-        return None
-
-    ultima = df_ml.iloc[-1]
-    señal_actual = ultima["ml_señal"]
-    if señal_actual is None:
-        return None
-
-    cambio, señal_previa = detectar_transicion(
-        df_ml, state, f"last_ml_rsi_{interval}", lambda d: d.iloc[-1]["ml_señal"], f"[{interval}][ML RSI]"
-    )
-    if not cambio:
-        return None
-
-    texto_señal = {"verde": "alcista", "rojo": "bajista", "gris": "neutral"}[señal_actual]
-    texto_previo = {"verde": "alcista", "rojo": "bajista", "gris": "neutral"}.get(señal_previa, señal_previa)
-
-    return (
-        f"<b>ML RSI {SYMBOL} {interval}</b>\n"
-        f"<b>{_col(texto_previo)} → {_col(texto_señal)}</b>\n"
-        f"RSI: {ultima['ml_rsi']:.1f}\n"
-        f"Umbral compra (dinamico): {ultima['ml_long_s']:.1f}\n"
-        f"Umbral venta (dinamico): {ultima['ml_short_s']:.1f}\n"
-        f"<b>Precio actual: {ultima['close']:.2f}</b>"
-    )
-
-
-def compute_veredicto(df: pd.DataFrame) -> pd.DataFrame:
-    """Requiere que el df ya tenga 'verde', 'marron' (de compute_koncorde) y
-    'adx' (de compute_adx) calculados. Añade 'kon_val' (criterio Bitman:
-    el mayor entre verde/marron, o el mas negativo si ambos son negativos),
-    'bbwp' (informativo, no cuenta) y 'veredicto' (COMPRAR / VENDER / ESPERAR)."""
-    df = compute_ao(df)
-    df = compute_bbwp(df)
-    mx = df[["verde", "marron"]].max(axis=1)
-    mn = df[["verde", "marron"]].min(axis=1)
-    df["kon_val"] = np.where(mx < 0, mn, mx)
-
-    adx_subiendo = df["adx"] > df["adx"].shift(1)
-    ko_bull = df["kon_val"] > 0
-    ko_bear = df["kon_val"] < 0
-
-    es_compra = (df["ao_estado"] == "alcista") & adx_subiendo & ko_bull
-    es_venta = (df["ao_estado"] == "bajista") & adx_subiendo & ko_bear
-    df["veredicto"] = np.select([es_compra, es_venta], ["COMPRAR", "VENDER"], default="ESPERAR")
-    return df
-
-
-def motivo_espera(row) -> str:
-    """Motivo granular de por que el veredicto es ESPERAR (replica
-    baseVerdictAt del panel original)."""
-    adx_subiendo = row.get("_adx_subiendo", False)
-    if not adx_subiendo:
-        return "Sin impulso: el ADX no esta subiendo"
-    if row["ao_estado"] in ("retroceso_alcista", "retroceso_bajista"):
-        return "En retroceso: esperando reanudacion de la tendencia"
-    if row["ao_estado"] == "alcista" and not row["kon_val"] > 0:
-        return "AO alcista pero Koncorde aun no confirma"
-    if row["ao_estado"] == "bajista" and not row["kon_val"] < 0:
-        return "AO bajista pero Koncorde aun no confirma"
-    return "Señales sin alineacion clara"
-
-
 # --------------------------- SISTEMA 3: ML RSI (BackQuant) ---------------------------
 # Replica fiel de "Machine Learning RSI [BackQuant]" (codigo Pine v5,
 # licencia MPL 2.0). RSI(27) sobre el precio MINIMO (no el cierre),
@@ -555,13 +417,6 @@ ML_RSI_MAX_DATA = 3000
 ML_RSI_MAX_ITER = 2000
 
 
-def _rsi_wilder(series: pd.Series, length: int) -> pd.Series:
-    """RSI con suavizado de Wilder (ta.rsi de Pine)."""
-    delta = series.diff()
-    gain = delta.clip(lower=0).ewm(alpha=1 / length, adjust=False).mean()
-    loss = (-delta.clip(upper=0)).ewm(alpha=1 / length, adjust=False).mean()
-    rs = gain / loss.replace(0, 1e-12)
-    return 100 - (100 / (1 + rs))
 
 
 def _kmeans_1d_3(values: np.ndarray, max_iter: int = ML_RSI_MAX_ITER) -> np.ndarray | None:
@@ -585,14 +440,6 @@ def _kmeans_1d_3(values: np.ndarray, max_iter: int = ML_RSI_MAX_ITER) -> np.ndar
         centroids = nuevos
     return centroids
 
-
-def _rsi_wilder(series: pd.Series, length: int) -> pd.Series:
-    """RSI con suavizado de Wilder (ta.rsi de Pine)."""
-    delta = series.diff()
-    gain = delta.clip(lower=0).ewm(alpha=1 / length, adjust=False).mean()
-    loss = (-delta.clip(upper=0)).ewm(alpha=1 / length, adjust=False).mean()
-    rs = gain / loss.replace(0, 1e-12)
-    return 100 - (100 / (1 + rs))
 
 
 def compute_ml_rsi(df: pd.DataFrame, rsi_length: int = ML_RSI_LENGTH,
@@ -634,7 +481,7 @@ def compute_ml_rsi(df: pd.DataFrame, rsi_length: int = ML_RSI_LENGTH,
     return df
 
 
-def construir_bloque_mlrsi(df_ml: pd.DataFrame, interval: str, state: dict) -> str | None:
+def construir_bloque_ml_rsi(df_ml: pd.DataFrame, interval: str, state: dict) -> str | None:
     """Avisa cuando la señal del ML RSI cambia (verde=compra, rojo=venta,
     gris=neutral). Mira la vela EN CURSO, igual que los otros 2 sistemas."""
     resultado = detectar_transicion(
@@ -709,19 +556,35 @@ def construir_bloque_bitman(df_ver: pd.DataFrame, interval: str, state: dict) ->
 
 # --------------------------- ESTADO (anti-duplicados) ---------------------------
 def load_state() -> dict:
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE) as f:
-            return json.load(f)
-    return {}
+    """Carga el estado persistido; un JSON inválido se trata como vacío."""
+    if not os.path.exists(STATE_FILE):
+        return {}
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"[AVISO] No se pudo cargar {STATE_FILE}: {exc}. Se inicia estado vacío.")
+        return {}
 
 
 def save_state(state: dict):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f)
+    """Guarda el estado de forma atómica para evitar un JSON incompleto."""
+    state_path = Path(STATE_FILE)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{state_path.name}.", dir=str(state_path.parent), text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_name, state_path)
+    finally:
+        if os.path.exists(tmp_name):
+            os.remove(tmp_name)
 
 
 def detectar_transicion(df: pd.DataFrame, state: dict, state_key: str, calcular_valor, log_prefix: str):
-    """Boilerplate compartido por los 2 sistemas (cruce y Bitman): comprueba
+    """Boilerplate compartido por los sistemas de alerta: comprueba
     que hay datos suficientes, calcula el valor actual, lo compara contra
     el ultimo guardado en 'state[state_key]', actualiza el estado in-place,
     y distingue 'primera vez' de 'cambio real'.
@@ -765,7 +628,7 @@ def send_telegram(message: str):
 
 
 # --------------------------- MAIN (revisa varias temporalidades) ---------------------------
-INTERVALS = ["1h", "1d"]  # temporalidades revisadas en cada pasada
+INTERVALS = ("1h", "1d")  # única fuente de verdad de las temporalidades
 
 CROSS_DESC = {
     "alza": "Verde entra en la montaña (cruce al alza sobre media)",
@@ -773,8 +636,8 @@ CROSS_DESC = {
 }
 
 CONFIRMED_DESC = {
-    "alza": "Entrada CONFIRMADA (3/3: cruce + valor + Trend Speed Analyzer + ADX alcista)",
-    "baja": "Salida CONFIRMADA (3/3: cruce + valor + Trend Speed Analyzer + ADX bajista)",
+    "alza": "Entrada CONFIRMADA (3/3 filtros: valor + Trend Speed Analyzer + ADX alcista)",
+    "baja": "Salida CONFIRMADA (3/3 filtros: valor + Trend Speed Analyzer + ADX bajista)",
 }
 
 PARTIAL_DESC = {
@@ -884,7 +747,7 @@ def _linea_temporalidad(iv: str, df: pd.DataFrame, df_ver: pd.DataFrame | None,
 
 def resumen_temporalidades(interval_actual: str, df_actual: pd.DataFrame, df_ver_actual: pd.DataFrame,
                             df_ml_actual: pd.DataFrame, otros_dfs: dict, otros_ver: dict, otros_ml: dict) -> str:
-    """Una linea por CADA temporalidad (la actual, marcada, y las otras 2),
+    """Una linea por cada temporalidad configurada,
     combinando el estado EN VIVO de los 3 sistemas: posicion + condiciones
     del Koncorde, el veredicto de Bitman, y la señal del ML RSI."""
     lineas = [f"{_linea_temporalidad(interval_actual, df_actual, df_ver_actual, df_ml_actual)} (esta)"]
@@ -960,76 +823,59 @@ def construir_bloque_cruce(df: pd.DataFrame, interval: str, state: dict) -> str 
     return bloque
 
 
+def calcular_temporalidad(interval: str):
+    """Descarga una temporalidad y calcula los tres conjuntos de indicadores."""
+    df = get_klines(interval=interval)
+    df = compute_koncorde(df)
+    df = compute_trend_speed(df)
+    df = compute_adx(df)
+    return df, compute_veredicto(df), compute_ml_rsi(df)
+
+
 def main():
     state = load_state()
+    dfs, dfs_ver, dfs_ml = {}, {}, {}
 
-    # --- Paso 1: descargar y calcular las 3 temporalidades por adelantado.
-    # Hace falta tener las 3 listas antes de revisar ninguna, porque cada
-    # mensaje ahora incluye un resumen del estado de las OTRAS 2
-    # temporalidades al final. ---
-    dfs = {}
-    dfs_ver = {}
-    dfs_ml = {}
+    # Primero calculamos todas las temporalidades para que cada alerta pueda
+    # incluir el resumen EN VIVO de las demás.
     for interval in INTERVALS:
         try:
-            df = get_klines(interval=interval)
-            df = compute_koncorde(df)
-            df = compute_trend_speed(df)
-            df = compute_adx(df)
-            dfs[interval] = df
-            dfs_ver[interval] = compute_veredicto(df)
-            dfs_ml[interval] = compute_ml_rsi(df)
+            dfs[interval], dfs_ver[interval], dfs_ml[interval] = calcular_temporalidad(interval)
         except Exception as e:
             print(f"[{interval}] [ERROR] {e}")
 
-    # --- Paso 2: revisar cada temporalidad. Si el cruce, Bitman y/o el ML
-    # RSI tienen algo nuevo que avisar en esta misma pasada, se fusiona todo
-    # en UN SOLO mensaje de Telegram por temporalidad (en vez de uno por
-    # cada pieza), con el resumen de las otras 2 temporalidades una unica
-    # vez al final. ---
+    # Después procesamos las transiciones y enviamos, como antes, un mensaje
+    # por temporalidad cuando alguno de sus sistemas tiene una señal nueva.
     for interval in INTERVALS:
         if interval not in dfs:
             continue
+
         otros_dfs = {iv: dfs[iv] for iv in INTERVALS if iv != interval and iv in dfs}
         otros_ver = {iv: dfs_ver[iv] for iv in INTERVALS if iv != interval and iv in dfs_ver}
         otros_ml = {iv: dfs_ml[iv] for iv in INTERVALS if iv != interval and iv in dfs_ml}
 
-        bloque_cruce = None
-        try:
-            bloque_cruce = construir_bloque_cruce(dfs[interval], interval, state)
-        except Exception as e:
-            # Si falla una temporalidad (ej. un fallo puntual de red), las
-            # demas se siguen revisando igualmente.
-            print(f"[{interval}] [ERROR] {e}")
-
-        bloque_bitman = None
-        if interval in dfs_ver:
+        bloques = []
+        for nombre, funcion, datos in (
+            ("cruce", construir_bloque_cruce, dfs[interval]),
+            ("veredicto", construir_bloque_bitman, dfs_ver[interval]),
+            ("ml_rsi", construir_bloque_ml_rsi, dfs_ml[interval]),
+        ):
             try:
-                bloque_bitman = construir_bloque_bitman(dfs_ver[interval], interval, state)
+                bloque = funcion(datos, interval, state)
+                if bloque:
+                    bloques.append(bloque)
             except Exception as e:
-                print(f"[{interval}][veredicto] [ERROR] {e}")
+                print(f"[{interval}][{nombre}] [ERROR] {e}")
 
-        bloque_mlrsi = None
-        if interval in dfs_ml:
-            try:
-                bloque_mlrsi = construir_bloque_mlrsi(dfs_ml[interval], interval, state)
-            except Exception as e:
-                print(f"[{interval}][ml_rsi] [ERROR] {e}")
-
-        bloques = [b for b in (bloque_cruce, bloque_bitman, bloque_mlrsi) if b is not None]
         if bloques:
             resumen = resumen_temporalidades(
                 interval, dfs[interval], dfs_ver.get(interval), dfs_ml.get(interval),
                 otros_dfs, otros_ver, otros_ml,
             )
-            msg = "\n\n".join(bloques) + f"\n{resumen}"
-            send_telegram(msg)
+            send_telegram("\n\n".join(bloques) + f"\n{resumen}")
 
-    # Se guarda siempre (no solo cuando hay mensaje): construir_bloque_*
-    # tambien actualiza el estado en la primera pasada de cada temporalidad
-    # (registro de la posicion/veredicto base) sin devolver un mensaje, y
-    # ese cambio tiene que persistir igualmente. El propio workflow ya evita
-    # comitear a git si state.json no cambio de verdad.
+    # Se guarda siempre: detectar_transicion también persiste los valores
+    # iniciales aunque no haya generado una alerta.
     save_state(state)
 
 
