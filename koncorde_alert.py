@@ -332,9 +332,10 @@ def compute_adx(df: pd.DataFrame, di_length: int = ADX_DI_LENGTH,
 # resto del sistema, que ya revisa 1h/1d de forma independiente.
 
 
-def compute_ao(df: pd.DataFrame) -> pd.DataFrame:
+def compute_ao(df: pd.DataFrame, copy: bool = True) -> pd.DataFrame:
     """Awesome Oscillator (5/34) y su estado de 4 valores."""
-    df = df.copy()
+    if copy:
+        df = df.copy()
     median = (df["high"] + df["low"]) / 2
     ao = median.rolling(5).mean() - median.rolling(34).mean()
     subiendo = ao > ao.shift(1)
@@ -352,13 +353,15 @@ def compute_ao(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def compute_bbwp(df: pd.DataFrame, length: int = 13, lookback: int = 252) -> pd.DataFrame:
+def compute_bbwp(df: pd.DataFrame, length: int = 13, lookback: int = 252,
+                 copy: bool = True) -> pd.DataFrame:
     """BBWP: percentil (0-100) de la anchura de las Bandas de Bollinger
     frente a su propio historial. Puramente informativo -- en el panel
     original tampoco participa en la logica COMPRAR/VENDER/ESPERAR (solo se
     muestra como contexto de volatilidad), asi que aqui se calcula pero no
     condiciona el veredicto."""
-    df = df.copy()
+    if copy:
+        df = df.copy()
     basis = df["close"].rolling(length).mean()
     dev = df["close"].rolling(length).std(ddof=0)
     width = 2 * dev / basis
@@ -401,8 +404,10 @@ def compute_veredicto(df: pd.DataFrame) -> pd.DataFrame:
     'adx' (de compute_adx) calculados. Añade 'kon_val' (criterio Bitman:
     el mayor entre verde/marron, o el mas negativo si ambos son negativos),
     'bbwp' (informativo, no cuenta) y 'veredicto' (COMPRAR / VENDER / ESPERAR)."""
-    df = compute_ao(df)
-    df = compute_bbwp(df)
+    # Una sola copia para todo el pipeline Bitman.
+    df = df.copy()
+    df = compute_ao(df, copy=False)
+    df = compute_bbwp(df, copy=False)
     mx = df[["verde", "marron"]].max(axis=1)
     mn = df[["verde", "marron"]].min(axis=1)
     df["kon_val"] = np.where(mx < 0, mn, mx)
@@ -432,50 +437,20 @@ def motivo_espera(row) -> str:
     return "Señales sin alineacion clara"
 
 
+
 # --------------------------- SISTEMA 3: ML RSI (BackQuant) ---------------------------
 # Replica fiel de "Machine Learning RSI [BackQuant]" (codigo Pine v5,
 # licencia MPL 2.0). RSI(27) sobre el precio MINIMO (no el cierre),
 # suavizado con SMA(4), con umbrales dinamicos de compra/venta ajustados
 # por k-means 1D (3 grupos, semilla en percentiles 25/50/75 de los ultimos
-# 3000 valores de RSI). Parametros tomados literalmente de la
-# configuracion real del indicador (captura del usuario), no de los
-# valores por defecto del script (que son distintos: RSI sobre 'close',
-# longitud 14, MA tipo EMA).
+# 3000 valores de RSI).
 #
-# NOTA IMPORTANTE: a diferencia del Trend Speed Analyzer o el ADX, esto
-# nunca se ha validado empiricamente (ni fidelidad de formula probada con
-# datos historicos, ni si sus señales aciertan mas que el azar). Se añade
-# directamente por decision explicita del usuario, no por haber pasado el
-# mismo proceso de validacion que el resto del sistema.
+# NOTA: el sistema se evalua solo sobre la ultima vela disponible para
+# reducir calculo en produccion; esto no equivale a un backtest historico.
 ML_RSI_LENGTH = 27
 ML_RSI_SMOOTH_PERIOD = 4
 ML_RSI_MAX_DATA = 3000
 ML_RSI_MAX_ITER = 2000
-
-
-
-# --------------------------- SISTEMA 3: ML RSI (BackQuant) ---------------------------
-# --------------------------- SISTEMA 3: ML RSI (BackQuant) ---------------------------
-# Replica fiel de "Machine Learning RSI [BackQuant]" (codigo Pine v5,
-# licencia MPL 2.0). RSI(27) sobre el precio MINIMO (no el cierre),
-# suavizado con SMA(4), con umbrales dinamicos de compra/venta ajustados
-# por k-means 1D (3 grupos, semilla en percentiles 25/50/75 de los ultimos
-# 3000 valores de RSI). Parametros tomados literalmente de la
-# configuracion real del indicador (captura del usuario), no de los
-# valores por defecto del script (que son distintos: RSI sobre 'close',
-# longitud 14, MA tipo EMA).
-#
-# NOTA IMPORTANTE: a diferencia del Trend Speed Analyzer o el ADX, esto
-# nunca se ha validado empiricamente (ni fidelidad de formula probada con
-# datos historicos, ni si sus señales aciertan mas que el azar). Se añade
-# directamente por decision explicita del usuario, no por haber pasado el
-# mismo proceso de validacion que el resto del sistema.
-ML_RSI_LENGTH = 27
-ML_RSI_SMOOTH_PERIOD = 4
-ML_RSI_MAX_DATA = 3000
-ML_RSI_MAX_ITER = 2000
-
-
 
 
 def _kmeans_1d_3(values: np.ndarray, max_iter: int = ML_RSI_MAX_ITER) -> np.ndarray | None:
