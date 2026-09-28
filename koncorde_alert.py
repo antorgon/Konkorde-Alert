@@ -395,6 +395,65 @@ def bbwp_texto(bbwp_val: float) -> str:
 
 
 
+# --------------------------- VEREDICTO BITMAN ---------------------------
+def compute_veredicto(df: pd.DataFrame) -> pd.DataFrame:
+    """Requiere que el df ya tenga 'verde', 'marron' (de compute_koncorde) y
+    'adx' (de compute_adx) calculados. Añade 'kon_val' (criterio Bitman:
+    el mayor entre verde/marron, o el mas negativo si ambos son negativos),
+    'bbwp' (informativo, no cuenta) y 'veredicto' (COMPRAR / VENDER / ESPERAR)."""
+    df = compute_ao(df)
+    df = compute_bbwp(df)
+    mx = df[["verde", "marron"]].max(axis=1)
+    mn = df[["verde", "marron"]].min(axis=1)
+    df["kon_val"] = np.where(mx < 0, mn, mx)
+
+    adx_subiendo = df["adx"] > df["adx"].shift(1)
+    ko_bull = df["kon_val"] > 0
+    ko_bear = df["kon_val"] < 0
+
+    es_compra = (df["ao_estado"] == "alcista") & adx_subiendo & ko_bull
+    es_venta = (df["ao_estado"] == "bajista") & adx_subiendo & ko_bear
+    df["veredicto"] = np.select([es_compra, es_venta], ["COMPRAR", "VENDER"], default="ESPERAR")
+    return df
+
+
+def motivo_espera(row) -> str:
+    """Motivo granular de por que el veredicto es ESPERAR (replica
+    baseVerdictAt del panel original)."""
+    adx_subiendo = row.get("_adx_subiendo", False)
+    if not adx_subiendo:
+        return "Sin impulso: el ADX no esta subiendo"
+    if row["ao_estado"] in ("retroceso_alcista", "retroceso_bajista"):
+        return "En retroceso: esperando reanudacion de la tendencia"
+    if row["ao_estado"] == "alcista" and not row["kon_val"] > 0:
+        return "AO alcista pero Koncorde aun no confirma"
+    if row["ao_estado"] == "bajista" and not row["kon_val"] < 0:
+        return "AO bajista pero Koncorde aun no confirma"
+    return "Señales sin alineacion clara"
+
+
+# --------------------------- SISTEMA 3: ML RSI (BackQuant) ---------------------------
+# Replica fiel de "Machine Learning RSI [BackQuant]" (codigo Pine v5,
+# licencia MPL 2.0). RSI(27) sobre el precio MINIMO (no el cierre),
+# suavizado con SMA(4), con umbrales dinamicos de compra/venta ajustados
+# por k-means 1D (3 grupos, semilla en percentiles 25/50/75 de los ultimos
+# 3000 valores de RSI). Parametros tomados literalmente de la
+# configuracion real del indicador (captura del usuario), no de los
+# valores por defecto del script (que son distintos: RSI sobre 'close',
+# longitud 14, MA tipo EMA).
+#
+# NOTA IMPORTANTE: a diferencia del Trend Speed Analyzer o el ADX, esto
+# nunca se ha validado empiricamente (ni fidelidad de formula probada con
+# datos historicos, ni si sus señales aciertan mas que el azar). Se añade
+# directamente por decision explicita del usuario, no por haber pasado el
+# mismo proceso de validacion que el resto del sistema.
+ML_RSI_LENGTH = 27
+ML_RSI_SMOOTH_PERIOD = 4
+ML_RSI_MAX_DATA = 3000
+ML_RSI_MAX_ITER = 2000
+
+
+
 # --------------------------- SISTEMA 3: ML RSI (BackQuant) ---------------------------
 # --------------------------- SISTEMA 3: ML RSI (BackQuant) ---------------------------
 # Replica fiel de "Machine Learning RSI [BackQuant]" (codigo Pine v5,
