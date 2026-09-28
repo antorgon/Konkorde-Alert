@@ -1,3 +1,98 @@
+Alerta Koncorde → Telegram
+
+Fuente de verdad
+
+El código es la fuente de verdad. Esta documentación se mantiene alineada con el comportamiento implementado; si aparece una discrepancia, se corrige la documentación para que describa el código.
+
+Temporalidades
+
+El bot procesa exclusivamente:
+
+1h
+
+1d
+
+La configuración está centralizada en INTERVALS = ("1h", "1d"). No se procesa 4h.
+
+Flujo de cada ejecución
+
+Para cada temporalidad el bot:
+
+Descarga velas de Binance, incluida la vela actualmente en curso.
+
+Calcula Koncorde.
+
+Calcula Trend Speed Analyzer.
+
+Calcula ADX/DMI.
+
+Calcula el veredicto Bitman, incluyendo AO y BBWP.
+
+Calcula ML RSI.
+
+Comprueba las transiciones de los sistemas de alerta.
+
+Envía a Telegram los cambios detectados.
+
+Guarda el estado en state.json.
+
+Antes de evaluar las alertas se calculan las temporalidades disponibles para poder incluir en cada mensaje un resumen EN VIVO de las demás.
+
+Sistemas de alerta
+
+Cruces
+
+Detecta el cambio entre la posición alcista/bajista de verde respecto a media. El cruce se complementa con tres filtros:
+
+valor de verde
+
+Trend Speed Analyzer
+
+ADX + DI dominante
+
+La confirmación total requiere los 3 filtros.
+
+Bitman
+
+Calcula un veredicto COMPRAR, VENDER o ESPERAR a partir de los componentes implementados en el código, incluyendo Koncorde, AO, BBWP y ADX.
+
+ML RSI
+
+La implementación activa usa RSI de Wilder sobre el mínimo, suavizado con SMA(4), y calcula umbrales dinámicos mediante k-means 1D con tres centroides. La clasificación de la vela actual es verde, rojo o gris.
+
+Datos y configuración
+
+Símbolo: BTCUSDT
+
+Histórico por petición: LOOKBACK = 400
+
+API de datos: Binance data-api.binance.vision
+
+Telegram
+
+Se utilizan las variables de entorno:
+
+TELEGRAM_TOKEN
+TELEGRAM_CHAT_ID
+
+Las credenciales no deben almacenarse en el código.
+
+Estado y anti-duplicados
+
+state.json conserva las últimas posiciones/veredictos/señales de cada temporalidad para avisar únicamente cuando hay una transición real.
+
+El archivo se guarda de forma atómica para reducir el riesgo de dejar un JSON incompleto si el proceso se interrumpe durante la escritura.
+
+Vela en curso y repintado
+
+Las alertas se evalúan sobre la vela EN CURSO, no esperan al cierre. Por ello, un cruce, veredicto o señal ML RSI puede aparecer y revertirse antes de que termine la vela. Ese comportamiento es deliberado y forma parte de la lógica actual.
+
+GitHub Actions
+
+El script está pensado para ejecutarse repetidamente desde el workflow de GitHub Actions, con el estado persistido en state.json.
+
+
+
 # Koncorde Alert (GitHub Actions, auto-perpetuo)
 
 Revisa el Koncorde de BTCUSDT en 3 temporalidades (1h, 4h y 1d) cada 5
