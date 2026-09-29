@@ -189,8 +189,9 @@ def _pvi_nvi(df: pd.DataFrame):
     return df
 
 
-def compute_koncorde(df: pd.DataFrame, m: int = 15) -> pd.DataFrame:
-    df = df.copy()
+def compute_koncorde(df: pd.DataFrame, m: int = 15, copy: bool = True) -> pd.DataFrame:
+    if copy:
+        df = df.copy()
     tprice = (df["open"] + df["high"] + df["low"] + df["close"]) / 4.0
     df = _pvi_nvi(df)
 
@@ -228,15 +229,23 @@ TSA_ACCEL_MULT = 2.8       # 'Accelerator Multiplier' -- idem, valor por defecto
 
 
 def _wma(series: pd.Series, length: int) -> pd.Series:
-    """Media movil ponderada linealmente, vectorizada (sin rolling().apply())."""
-    weights = pd.Series(range(1, length + 1), dtype=float)
-    weighted_sum = sum(series.shift(length - 1 - i) * w for i, w in enumerate(weights))
+    """Media movil ponderada linealmente, sin rolling().apply()."""
+    if length == 2:
+        return (series.shift(1) + 2.0 * series) / 3.0
+
+    weights = np.arange(1, length + 1, dtype=float)
+    weighted_sum = sum(
+        series.shift(length - 1 - i) * weight
+        for i, weight in enumerate(weights)
+    )
     return weighted_sum / weights.sum()
 
 
 def compute_trend_speed(df: pd.DataFrame, max_length: int = TSA_MAX_LENGTH,
-                         accel_multiplier: float = TSA_ACCEL_MULT) -> pd.DataFrame:
-    df = df.copy()
+                         accel_multiplier: float = TSA_ACCEL_MULT,
+                         copy: bool = True) -> pd.DataFrame:
+    if copy:
+        df = df.copy()
     close = df["close"]
 
     # Longitud dinamica en funcion del nivel de precio normalizado
@@ -286,8 +295,10 @@ def _rma(series: pd.Series, length: int) -> pd.Series:
 
 
 def compute_adx(df: pd.DataFrame, di_length: int = ADX_DI_LENGTH,
-                 adx_smoothing: int = ADX_SMOOTHING, ema_smooth: int = ADX_EMA_SMOOTH) -> pd.DataFrame:
-    df = df.copy()
+                 adx_smoothing: int = ADX_SMOOTHING, ema_smooth: int = ADX_EMA_SMOOTH,
+                 copy: bool = True) -> pd.DataFrame:
+    if copy:
+        df = df.copy()
     high, low, close = df["high"], df["low"], df["close"]
     prev_high, prev_low, prev_close = high.shift(1), low.shift(1), close.shift(1)
 
@@ -399,13 +410,15 @@ def bbwp_texto(bbwp_val: float) -> str:
 
 
 # --------------------------- VEREDICTO BITMAN ---------------------------
-def compute_veredicto(df: pd.DataFrame) -> pd.DataFrame:
+def compute_veredicto(df: pd.DataFrame, copy: bool = True) -> pd.DataFrame:
     """Requiere que el df ya tenga 'verde', 'marron' (de compute_koncorde) y
     'adx' (de compute_adx) calculados. Añade 'kon_val' (criterio Bitman:
     el mayor entre verde/marron, o el mas negativo si ambos son negativos),
     'bbwp' (informativo, no cuenta) y 'veredicto' (COMPRAR / VENDER / ESPERAR)."""
-    # Una sola copia para todo el pipeline Bitman.
-    df = df.copy()
+    # Una sola copia para todo el pipeline Bitman cuando se usa de forma
+    # independiente; el pipeline principal puede pasar copy=False.
+    if copy:
+        df = df.copy()
     df = compute_ao(df, copy=False)
     df = compute_bbwp(df, copy=False)
     mx = df[["verde", "marron"]].max(axis=1)
@@ -478,8 +491,10 @@ def _kmeans_1d_3(values: np.ndarray, max_iter: int = ML_RSI_MAX_ITER) -> np.ndar
 
 def compute_ml_rsi(df: pd.DataFrame, rsi_length: int = ML_RSI_LENGTH,
                     smooth_period: int = ML_RSI_SMOOTH_PERIOD,
-                    max_data: int = ML_RSI_MAX_DATA, max_iter: int = ML_RSI_MAX_ITER) -> pd.DataFrame:
-    df = df.copy()
+                    max_data: int = ML_RSI_MAX_DATA, max_iter: int = ML_RSI_MAX_ITER,
+                    copy: bool = True) -> pd.DataFrame:
+    if copy:
+        df = df.copy()
     rsi = _rsi_wilder(df["low"], rsi_length)  # Calculation Source = Minimo
     rsi = rsi.rolling(smooth_period).mean()   # Smooth RSI, SMA(4)
     df["ml_rsi"] = rsi
