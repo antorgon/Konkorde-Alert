@@ -377,16 +377,11 @@ def compute_bbwp(df: pd.DataFrame, length: int = 13, lookback: int = 252,
     dev = df["close"].rolling(length).std(ddof=0)
     width = 2 * dev / basis
 
-    def _pct_rank(x):
-        last = x[-1]
-        if np.isnan(last):
-            return np.nan
-        valid = x[~np.isnan(x)]
-        if valid.size == 0:
-            return np.nan
-        return (valid <= last).mean() * 100
-
-    df["bbwp"] = width.rolling(lookback, min_periods=5).apply(_pct_rank, raw=True)
+    # Rolling.rank(pct=True) devuelve exactamente el percentil de la
+    # observacion actual dentro de cada ventana. Es equivalente al
+    # antiguo rolling().apply() pero ejecutado por pandas de forma
+    # vectorizada, sin una funcion Python por ventana.
+    df["bbwp"] = width.rolling(lookback, min_periods=5).rank(pct=True) * 100.0
     return df
 
 
