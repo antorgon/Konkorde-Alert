@@ -23,5 +23,28 @@
   "last_live_pos_1d": "baja",
   "last_mlrsi_1h": "gris",
   "last_mlrsi_4h": "gris",
-  "last_mlrsi_1d": "gris"
+  "last_mlrsi_1d": "gris",
+  "bitman_last_candle_1h": "1793811599999",
+  "bitman_last_signal_1h": "COMPRAR",
+  "bitman_last_candle_4h": "1793807999999",
+  "bitman_last_signal_4h": "ESPERAR",
+  "bitman_last_candle_1d": "1793750399999",
+  "bitman_last_signal_1d": "ESPERAR",
+  "koncorde_last_candle_1h": "1793811599999",
+  "koncorde_last_position_1h": "alza",
+  "koncorde_last_candle_4h": "1793807999999",
+  "koncorde_last_position_4h": "alza",
+  "koncorde_last_candle_1d": "1793750399999",
+  "koncorde_last_position_1d": "baja",
+  "koncorde_last_candle_15m": "1793811599999",
+  "koncorde_last_position_15m": "alza",
+  "ml_rsi_live_signal_1h": "gris",
+  "ml_rsi_last_closed_candle_1h": "1793811599999",
+  "history_event_ids": [
+    "54bffd50e882ed49327044b1",
+    "7eb501fa103fcd46ab01d7f5"
+  ],
+  "ml_rsi_live_signal_1d": "gris",
+  "ml_rsi_last_closed_candle_1d": "1793750399999",
+  "tracked_events": {}
 }
