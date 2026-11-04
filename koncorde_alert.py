@@ -923,9 +923,503 @@ def main():
     save_state(state)
 
 
+
+
+# ============================================================================
+# NUEVA ARQUITECTURA INDEPENDIENTE (BitMan / Koncorde / ML RSI)
+# ============================================================================
+# Se conservan las funciones de cálculo existentes. Esta sección sustituye
+# el main anterior y separa temporalidades, cierres de vela e histórico.
+import hashlib
+from datetime import datetime, timezone
+
+STATE_FILE = "state.json"
+HISTORY_FILE = "signals_history.jsonl"
+LOOKBACK = 1000
+
+BITMAN_INTERVALS = ("1h", "4h", "1d")
+KONCORDE_INTERVALS = ("1h", "4h", "1d")
+KONCORDE_OBSERVE_INTERVALS = ("15m",)
+ML_RSI_INTERVALS = ("1h", "1d")
+
+INTERVAL_MS = {
+    "15m": 15 * 60 * 1000,
+    "1h": 60 * 60 * 1000,
+    "4h": 4 * 60 * 60 * 1000,
+    "1d": 24 * 60 * 60 * 1000,
+}
+OUTCOME_HORIZONS_MS = {
+    "1h": 60 * 60 * 1000,
+    "3h": 3 * 60 * 60 * 1000,
+    "6h": 6 * 60 * 60 * 1000,
+    "12h": 12 * 60 * 60 * 1000,
+    "24h": 24 * 60 * 60 * 1000,
+}
+
+
+def _utc_now_ms() -> int:
+    return int(datetime.now(timezone.utc).timestamp() * 1000)
+
+
+def _iso_utc(ms: int) -> str:
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat()
+
+
+def _candle_id(row) -> str:
+    return str(int(pd.Timestamp(row["close_time"]).timestamp() * 1000))
+
+
+def split_closed_live(df: pd.DataFrame, interval: str):
+    """Devuelve (cerradas, viva). Usa close_time de Binance, no el reloj local
+    del runner, para no tratar una vela en formación como cerrada."""
+    if df.empty:
+        raise ValueError(f"Binance no devolvió velas para {interval}")
+    now = pd.Timestamp.now(tz="UTC")
+    closed_mask = df["close_time"] < now
+    closed = df.loc[closed_mask].copy().reset_index(drop=True)
+    live = df.loc[~closed_mask].copy().reset_index(drop=True)
+    return closed, live
+
+
+def _append_history(record: dict):
+    """Append-only, con fsync para reducir el riesgo de perder eventos."""
+    path = Path(HISTORY_FILE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(record, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(line + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def _event_id(system: str, interval: str, kind: str, event_time_ms: int, signal: str) -> str:
+    raw = f"{SYMBOL}|{system}|{interval}|{kind}|{event_time_ms}|{signal}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def _record_event(state: dict, *, system: str, interval: str, kind: str,
+                  signal: str, price: float, event_time_ms: int,
+                  status: str, indicators: dict | None = None,
+                  telegram_sent: bool = False) -> str:
+    event_id = _event_id(system, interval, kind, event_time_ms, signal)
+    seen = state.setdefault("history_event_ids", [])
+    if event_id not in seen:
+        record = {
+            "record_type": "signal",
+            "event_id": event_id,
+            "symbol": SYMBOL,
+            "system": system,
+            "interval": interval,
+            "kind": kind,
+            "signal": signal,
+            "status": status,
+            "event_time_ms": int(event_time_ms),
+            "event_time_utc": _iso_utc(int(event_time_ms)),
+            "price": float(price),
+            "telegram_sent": bool(telegram_sent),
+            "indicators": indicators or {},
+        }
+        _append_history(record)
+        seen.append(event_id)
+        # Mantener state acotado: los IDs históricos completos permanecen en
+        # JSONL; en state basta una ventana amplia para deduplicar reinicios.
+        if len(seen) > 5000:
+            del seen[:-5000]
+    return event_id
+
+
+def _safe_float(value):
+    try:
+        v = float(value)
+        return v if np.isfinite(v) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _track_outcomes(state: dict, current_price: float, now_ms: int):
+    """Añade resultados como nuevos registros; nunca reescribe eventos."""
+    events = state.setdefault("tracked_events", {})
+    for event_id, item in list(events.items()):
+        outcomes = item.setdefault("outcomes", {})
+        for label, horizon_ms in OUTCOME_HORIZONS_MS.items():
+            if label in outcomes or now_ms < item["event_time_ms"] + horizon_ms:
+                continue
+            entry = float(item["price"])
+            if entry <= 0:
+                continue
+            ret = (float(current_price) / entry - 1.0) * 100.0
+            outcome = {
+                "record_type": "outcome",
+                "event_id": event_id,
+                "symbol": SYMBOL,
+                "system": item["system"],
+                "interval": item["interval"],
+                "horizon": label,
+                "target_time_ms": item["event_time_ms"] + horizon_ms,
+                "observed_time_ms": int(now_ms),
+                "entry_price": entry,
+                "observed_price": float(current_price),
+                "return_pct": round(ret, 6),
+                "directional_success": (
+                    ret > 0 if item["direction"] == "bullish"
+                    else ret < 0 if item["direction"] == "bearish"
+                    else None
+                ),
+            }
+            _append_history(outcome)
+            outcomes[label] = {
+                "observed_time_ms": int(now_ms),
+                "observed_price": float(current_price),
+                "return_pct": round(ret, 6),
+            }
+        if all(label in outcomes for label in OUTCOME_HORIZONS_MS):
+            events.pop(event_id, None)
+
+
+def _trackable_direction(system: str, signal: str):
+    s = str(signal).upper()
+    if s in ("COMPRAR", "VERDE", "ALZA", "ALCISTA", "BULLISH"):
+        return "bullish"
+    if s in ("VENDER", "ROJO", "BAJA", "BAJISTA", "BEARISH"):
+        return "bearish"
+    return None
+
+
+def _store_trackable(state: dict, event_id: str, system: str, interval: str,
+                     signal: str, event_time_ms: int, price: float):
+    direction = _trackable_direction(system, signal)
+    if direction:
+        state.setdefault("tracked_events", {}).setdefault(event_id, {
+            "system": system,
+            "interval": interval,
+            "signal": signal,
+            "direction": direction,
+            "event_time_ms": int(event_time_ms),
+            "price": float(price),
+            "outcomes": {},
+        })
+
+
+def _indicators_for_history(row, include_koncorde=True):
+    fields = ("close", "verde", "marron", "media", "tsa_bullish",
+              "adx", "di_plus", "di_minus", "ao", "ao_estado",
+              "kon_val", "bbwp", "ml_rsi", "ml_long_s", "ml_short_s",
+              "ml_señal")
+    result = {}
+    for key in fields:
+        if key in row.index:
+            value = row[key]
+            if isinstance(value, (np.bool_, bool)):
+                result[key] = bool(value)
+            elif isinstance(value, (str,)) or value is None:
+                result[key] = value
+            else:
+                result[key] = _safe_float(value)
+    return result
+
+
+def _send_block(block: str):
+    if block:
+        send_telegram(block)
+
+
+def _process_bitman(interval: str, df_ver: pd.DataFrame, state: dict):
+    if len(df_ver) < 2:
+        return
+    row = df_ver.iloc[-1]
+    candle = _candle_id(row)
+    key_candle = f"bitman_last_candle_{interval}"
+    key_signal = f"bitman_last_signal_{interval}"
+    if state.get(key_candle) == candle:
+        return
+    signal = str(row["veredicto"])
+    previous = state.get(key_signal)
+
+    if previous is None:
+        state[key_candle] = candle
+        state[key_signal] = signal
+        print(f"[BITMAN {interval}] Estado inicial: {signal}; sin alerta.")
+        return
+    if signal == previous:
+        state[key_candle] = candle
+        state[key_signal] = signal
+        return
+
+    if signal == "COMPRAR":
+        reason = "AO alcista + ADX creciente + Koncorde positivo"
+    elif signal == "VENDER":
+        reason = "AO bajista + ADX creciente + Koncorde negativo"
+    else:
+        reason = "Condiciones de entrada/salida ya no alineadas"
+    event_ms = int(pd.Timestamp(row["close_time"]).timestamp() * 1000)
+    block = (
+        f"<b>BITMAN {SYMBOL} {interval.upper()}</b>\n"
+        f"<b>{previous} → {signal}</b>\n{reason}\n"
+        f"AO: {_safe_float(row['ao']):.1f} ({row['ao_estado']})\n"
+        f"Koncorde: {_safe_float(row['kon_val']):.1f} · "
+        f"ADX: {_safe_float(row['adx']):.1f}\n"
+        f"<b>Cierre: {float(row['close']):.2f}</b>"
+    )
+    _send_block(block)
+    state[key_candle] = candle
+    state[key_signal] = signal
+    eid = _record_event(
+        state, system="bitman", interval=interval, kind="closed_bar_transition",
+        signal=signal, price=float(row["close"]), event_time_ms=event_ms,
+        status="confirmed", indicators=_indicators_for_history(row),
+        telegram_sent=True,
+    )
+    _store_trackable(state, eid, "bitman", interval, signal, event_ms, float(row["close"]))
+
+
+def _process_koncorde(interval: str, df: pd.DataFrame, state: dict,
+                      observation_only: bool = False):
+    if len(df) < 3:
+        return
+    row, prev = df.iloc[-1], df.iloc[-2]
+    candle = _candle_id(row)
+    key_candle = f"koncorde_last_candle_{interval}"
+    if state.get(key_candle) == candle:
+        return
+    if key_candle not in state:
+        # Primera ejecución: establecer línea base sin emitir un cruce antiguo.
+        initial_pos = "alza" if float(row["verde"]) > float(row["media"]) else "baja"
+        state[key_candle] = candle
+        state[f"koncorde_last_position_{interval}"] = initial_pos
+        print(f"[KONCORDE {interval}] Línea base inicial: {initial_pos}; sin alerta.")
+        return
+    prev_pos = "alza" if float(prev["verde"]) > float(prev["media"]) else "baja"
+    pos = "alza" if float(row["verde"]) > float(row["media"]) else "baja"
+    if pos == prev_pos:
+        state[key_candle] = candle
+        state[f"koncorde_last_position_{interval}"] = pos
+        return
+
+    c = evaluar_condiciones_koncorde(row, pos)
+    n_ok = int(c["n_ok"])
+    event_ms = int(pd.Timestamp(row["close_time"]).timestamp() * 1000)
+    direction = "alcista" if pos == "alza" else "bajista"
+    status = "observation" if observation_only else ("confirmed" if n_ok == 3 else "partial" if n_ok == 2 else "unconfirmed")
+    eid = _record_event(
+        state, system="koncorde_observation" if observation_only else "koncorde",
+        interval=interval, kind="closed_bar_cross", signal=direction,
+        price=float(row["close"]), event_time_ms=event_ms, status=status,
+        indicators={
+            **_indicators_for_history(row),
+            "filters": {
+                "value_ok": bool(c["valor_ok"]),
+                "tsa_ok": bool(c["tsa_ok"]),
+                "adx_ok": bool(c["adx_ok"]),
+                "n_ok": n_ok,
+                "value_state": c["valor_estado"],
+            },
+        },
+        telegram_sent=False,
+    )
+
+    if observation_only:
+        state[key_candle] = candle
+        state[f"koncorde_last_position_{interval}"] = pos
+        print(f"[KONCORDE {interval}] Observación M15: cruce {direction}, {n_ok}/3.")
+        return
+    if n_ok < 2:
+        state[key_candle] = candle
+        state[f"koncorde_last_position_{interval}"] = pos
+        print(f"[KONCORDE {interval}] Cruce {direction}, solo {n_ok}/3; registrado sin Telegram.")
+        return
+
+    icon = "🟢" if pos == "alza" else "🔴"
+    label = "CONFIRMADO 3/3" if n_ok == 3 else "PARCIAL 2/3"
+    value_text = f"{c['verde_val']:.1f} ({TEXTO_VALOR[c['valor_estado']]})"
+    block = (
+        f"<b>KONCORDE {SYMBOL} {interval.upper()}</b>\n"
+        f"<b>{icon} Cruce {direction.upper()} · {label}</b>\n"
+        f"Precio de cierre: {float(row['close']):.2f}\n"
+        f"Valor verde: {value_text}\n"
+        f"TSA: {'OK' if c['tsa_ok'] else 'NO'} · "
+        f"ADX/DI: {'OK' if c['adx_ok'] else 'NO'} · "
+        f"Filtros: {n_ok}/3"
+    )
+    _send_block(block)
+    state[key_candle] = candle
+    state[f"koncorde_last_position_{interval}"] = pos
+    # Actualiza telegram_sent en un evento de confirmación separado para que
+    # el registro original siga siendo inmutable.
+    _record_event(
+        state, system="koncorde", interval=interval,
+        kind="telegram_alert", signal=f"{direction}_{n_ok}of3",
+        price=float(row["close"]), event_time_ms=event_ms,
+        status=status, indicators={"source_event_id": eid, "filters": n_ok},
+        telegram_sent=True,
+    )
+    _store_trackable(state, eid, "koncorde", interval, direction, event_ms, float(row["close"]))
+
+
+def _process_ml_rsi(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFrame,
+                    state: dict, is_provisional: bool = True):
+    if df_live.empty or len(df_live) < 5:
+        return
+    row = df_live.iloc[-1]
+    signal = row.get("ml_señal")
+    if signal not in ("verde", "rojo", "gris"):
+        return
+
+    key_live = f"ml_rsi_live_signal_{interval}"
+    previous = state.get(key_live)
+    if previous is None:
+        state[key_live] = signal
+        print(f"[ML RSI {interval}] Estado inicial: {signal}; sin alerta.")
+    elif previous != signal:
+        if signal in ("verde", "rojo"):
+            now_ms = _utc_now_ms()
+            status = "provisional" if is_provisional else "confirmed"
+            timing_label = "PROVISIONAL" if is_provisional else "CONFIRMADO"
+            icon = "🟢" if signal == "verde" else "🔴"
+            block = (
+                f"<b>ML RSI {SYMBOL} {interval.upper()}</b>\n"
+                f"<b>{previous} → {icon} {signal.upper()} · {timing_label}</b>\n"
+                f"RSI(27, mínimo, SMA4): {float(row['ml_rsi']):.1f}\n"
+                f"Umbral verde: {float(row['ml_long_s']):.1f} · "
+                f"Umbral rojo: {float(row['ml_short_s']):.1f}\n"
+                f"<b>Precio en vivo: {float(row['close']):.2f}</b>"
+            )
+            _send_block(block)
+            eid = _record_event(
+                state, system="ml_rsi", interval=interval,
+                kind="intrabar_transition", signal=signal,
+                price=float(row["close"]), event_time_ms=now_ms,
+                status=status, indicators=_indicators_for_history(row),
+                telegram_sent=True,
+            )
+            _store_trackable(state, eid, "ml_rsi", interval, signal, now_ms, float(row["close"]))
+            state[key_live] = signal
+        else:
+            state[key_live] = signal
+            print(f"[ML RSI {interval}] Cambio a gris; actualizado sin alerta.")
+
+    # Registrar la clasificación de la última vela cerrada una sola vez.
+    if not df_closed.empty:
+        closed_ml = compute_ml_rsi(df_closed.copy())
+        closed_row = closed_ml.iloc[-1]
+        closed_signal = closed_row.get("ml_señal")
+        closed_candle = _candle_id(closed_row)
+        key_closed = f"ml_rsi_last_closed_candle_{interval}"
+        if state.get(key_closed) != closed_candle:
+            state[key_closed] = closed_candle
+            if closed_signal in ("verde", "rojo", "gris"):
+                event_ms = int(pd.Timestamp(closed_row["close_time"]).timestamp() * 1000)
+                _record_event(
+                    state, system="ml_rsi", interval=interval,
+                    kind="closed_bar_classification", signal=str(closed_signal),
+                    price=float(closed_row["close"]), event_time_ms=event_ms,
+                    status="confirmed", indicators=_indicators_for_history(closed_row),
+                    telegram_sent=False,
+                )
+
+
+def _calculate_base(interval: str):
+    raw = get_klines(interval=interval, limit=LOOKBACK)
+    closed, live = split_closed_live(raw, interval)
+    if len(closed) < 100:
+        raise ValueError(f"Datos cerrados insuficientes para {interval}: {len(closed)}")
+    # Indicadores sobre datos cerrados y, cuando se necesita RSI inmediato,
+    # sobre el conjunto que incluye la vela en curso.
+    df_closed = compute_koncorde(closed.copy())
+    df_closed = compute_trend_speed(df_closed)
+    df_closed = compute_adx(df_closed)
+    df_closed = compute_veredicto(df_closed)
+
+    df_live = None
+    if not live.empty:
+        combined = pd.concat([closed.tail(LOOKBACK), live], ignore_index=True)
+        df_live = compute_ml_rsi(combined.copy())
+    else:
+        df_live = compute_ml_rsi(closed.copy())
+    return df_closed, df_live
+
+
+def main():
+    state = load_state()
+    # Crear el fichero aunque todavía no haya señales; el workflow lo versiona
+    # en cada ciclo y así la persistencia queda preparada desde el arranque.
+    Path(HISTORY_FILE).touch(exist_ok=True)
+    now_ms = _utc_now_ms()
+    current_price = None
+
+    required = sorted(set(BITMAN_INTERVALS + KONCORDE_INTERVALS +
+                          KONCORDE_OBSERVE_INTERVALS + ML_RSI_INTERVALS),
+                      key=lambda x: INTERVAL_MS[x])
+    market = {}
+
+    # Descargar una sola vez por temporalidad; mantener datos cerrados y vivos.
+    for interval in required:
+        try:
+            fetch_limit = ML_RSI_MAX_DATA if interval in ML_RSI_INTERVALS else LOOKBACK
+            raw = get_klines(interval=interval, limit=fetch_limit)
+            closed, live = split_closed_live(raw, interval)
+            if len(closed) < 100:
+                raise ValueError(f"Solo {len(closed)} velas cerradas")
+            df_closed = compute_koncorde(closed.copy())
+            df_closed = compute_trend_speed(df_closed)
+            df_closed = compute_adx(df_closed)
+            df_closed = compute_veredicto(df_closed)
+            source_for_ml = pd.concat([closed.tail(ML_RSI_MAX_DATA), live], ignore_index=True) if not live.empty else closed.copy()
+            df_ml = compute_ml_rsi(source_for_ml.copy()) if interval in ML_RSI_INTERVALS else None
+            market[interval] = {
+                "closed": df_closed,
+                "live": live,
+                "ml": df_ml,
+            }
+            if interval == "1h" and not live.empty:
+                current_price = float(live.iloc[-1]["close"])
+        except Exception as exc:
+            print(f"[{interval}] [ERROR] No se procesa esta temporalidad: {exc}")
+
+    # Sistemas cerrados: BitMan y Koncorde H1/H4/D1.
+    for interval in BITMAN_INTERVALS:
+        if interval in market:
+            try:
+                _process_bitman(interval, market[interval]["closed"], state)
+            except Exception as exc:
+                print(f"[BITMAN {interval}] [ERROR] {exc}")
+
+    for interval in KONCORDE_INTERVALS:
+        if interval in market:
+            try:
+                _process_koncorde(interval, market[interval]["closed"], state, False)
+            except Exception as exc:
+                print(f"[KONCORDE {interval}] [ERROR] {exc}")
+
+    # M15: cruces cerrados registrados, nunca enviados a Telegram.
+    for interval in KONCORDE_OBSERVE_INTERVALS:
+        if interval in market:
+            try:
+                _process_koncorde(interval, market[interval]["closed"], state, True)
+            except Exception as exc:
+                print(f"[KONCORDE OBS {interval}] [ERROR] {exc}")
+
+    # ML RSI: estado vivo, independiente, H1 y D1.
+    for interval in ML_RSI_INTERVALS:
+        if interval in market:
+            try:
+                _process_ml_rsi(
+                    interval, market[interval]["ml"],
+                    market[interval]["closed"], state,
+                    is_provisional=not market[interval]["live"].empty
+                )
+            except Exception as exc:
+                print(f"[ML RSI {interval}] [ERROR] {exc}")
+
+    # Completar resultados posteriores con el último precio H1 disponible.
+    if current_price is not None:
+        _track_outcomes(state, current_price, now_ms)
+
+    save_state(state)
+
+
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f"[ERROR] {e}")
+        print(f"[ERROR FATAL] {e}")
         sys.exit(1)
