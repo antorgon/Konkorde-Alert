@@ -1,322 +1,220 @@
-Alerta Koncorde → Telegram
+# Alerta Koncorde / BitMan / ML RSI — BTCUSDT
 
-Fuente de verdad
+## Estado de esta documentación
 
-El código es la fuente de verdad. Esta documentación se mantiene alineada con el comportamiento implementado; si aparece una discrepancia, se corrige la documentación para que describa el código.
+Esta documentación describe la versión preparada en `koncorde_alert_implemented.py` y `koncorde_implemented.yml`. Antes de activarla en el repositorio hay que revisar los archivos, ejecutar el workflow manualmente y validar los registros y mensajes reales.
 
-Temporalidades
+La compilación sintáctica de Python y la comprobación del archivo YAML no equivalen a una prueba integral contra Binance, Telegram y GitHub Actions.
 
-El bot procesa exclusivamente:
+## 1. Sistemas y temporalidades
 
-1h
+La configuración está separada por sistema:
 
-1d
+| Sistema | Temporalidades | Comportamiento |
+|---|---|---|
+| BitMan | H1, H4, D1 | Evalúa velas cerradas y avisa cuando cambia el veredicto |
+| Koncorde | H1, H4, D1 | Evalúa cruces en velas cerradas; avisa con 2/3 o 3/3 filtros |
+| Koncorde — observación | M15 | Registra cruces cerrados en el histórico; no envía alertas |
+| ML RSI | H1, D1 | Vigila la vela actual y avisa al cambiar a verde o rojo; el aviso es provisional |
 
-La configuración está centralizada en INTERVALS = ("1h", "1d"). No se procesa 4h.
+Las configuraciones están centralizadas en:
 
-Flujo de cada ejecución
-
-Para cada temporalidad el bot:
-
-Descarga velas de Binance, incluida la vela actualmente en curso.
-
-Calcula Koncorde.
-
-Calcula Trend Speed Analyzer.
-
-Calcula ADX/DMI.
-
-Calcula el veredicto Bitman, incluyendo AO y BBWP.
-
-Calcula ML RSI.
-
-Comprueba las transiciones de los sistemas de alerta.
-
-Envía a Telegram los cambios detectados.
-
-Guarda el estado en state.json.
-
-Antes de evaluar las alertas se calculan las temporalidades disponibles para poder incluir en cada mensaje un resumen EN VIVO de las demás.
-
-Sistemas de alerta
-
-Cruces
-
-Detecta el cambio entre la posición alcista/bajista de verde respecto a media. El cruce se complementa con tres filtros:
-
-valor de verde
-
-Trend Speed Analyzer
-
-ADX + DI dominante
-
-La confirmación total requiere los 3 filtros.
-
-Bitman
-
-Calcula un veredicto COMPRAR, VENDER o ESPERAR a partir de los componentes implementados en el código, incluyendo Koncorde, AO, BBWP y ADX.
-
-ML RSI
-
-La implementación activa usa RSI de Wilder sobre el mínimo, suavizado con SMA(4), y calcula umbrales dinámicos mediante k-means 1D con tres centroides. La clasificación de la vela actual es verde, rojo o gris.
-
-Datos y configuración
-
-Símbolo: BTCUSDT
-
-Histórico por petición: LOOKBACK = 400
-
-API de datos: Binance data-api.binance.vision
-
-Telegram
-
-Se utilizan las variables de entorno:
-
-TELEGRAM_TOKEN
-TELEGRAM_CHAT_ID
-
-Las credenciales no deben almacenarse en el código.
-
-Estado y anti-duplicados
-
-state.json conserva las últimas posiciones/veredictos/señales de cada temporalidad para avisar únicamente cuando hay una transición real.
-
-El archivo se guarda de forma atómica para reducir el riesgo de dejar un JSON incompleto si el proceso se interrumpe durante la escritura.
-
-Vela en curso y repintado
-
-Las alertas se evalúan sobre la vela EN CURSO, no esperan al cierre. Por ello, un cruce, veredicto o señal ML RSI puede aparecer y revertirse antes de que termine la vela. Ese comportamiento es deliberado y forma parte de la lógica actual.
-
-GitHub Actions
-
-El script está pensado para ejecutarse repetidamente desde el workflow de GitHub Actions, con el estado persistido en state.json.
-
-
-
-# Koncorde Alert (GitHub Actions, auto-perpetuo)
-
-Revisa el Koncorde de BTCUSDT en 3 temporalidades (1h, 4h y 1d) cada 5
-minutos y te avisa por Telegram, **en el instante en que se produce el
-cambio** (sobre la vela todavía en formación, sin esperar a que cierre).
-Corre gratis en los servidores de GitHub, indefinidamente, sin que tengas
-que tener tu ordenador encendido ni depender de ningún servicio externo.
-
-## Por qué funciona así (y no con un simple `schedule`)
-
-El `schedule` nativo de GitHub Actions (el cron estándar) resultó ser poco
-fiable para este repo: se retrasaba horas o directamente se saltaba
-ejecuciones (es un problema conocido de la plataforma en repos nuevos/de
-bajo trafico, no de esta configuración). La solución fue un **workflow
-auto-perpetuo**:
-
-- Se arranca una vez (a mano, con "Run workflow").
-- Dentro, un bucle comprueba el Koncorde cada 5 minutos durante ~5h40m (el
-  máximo que permite una sola ejecución de GitHub Actions son 6h).
-- Justo antes de acabar, el propio workflow se vuelve a lanzar a sí mismo
-  vía la API de GitHub (usando el token que GitHub ya proporciona
-  automáticamente, sin necesidad de crear ningún token ni cuenta externa).
-- Así se encadena para siempre.
-- Como red de seguridad, hay además un `schedule` de 1 vez al día, por si
-  la cadena se llegara a romper alguna vez (fallo, cancelación, etc.). Un
-  bloqueo de `concurrency` evita que esto cree una segunda cadena en
-  paralelo si la anterior sigue viva.
-
-**Importante**: el repositorio tiene que ser **público** para que esto
-salga gratis. En un repo privado, tener un job corriendo casi 24/7 consume
-muchísimos minutos de Actions y se agotaría el cupo gratuito del plan
-(2.000 min/mes) enseguida.
-
-## Temporalidades
-
-Cada pasada revisa **1h, 4h y 1d** de forma independiente (cada una con su
-propio calculo de Koncorde, Trend Speed Analyzer, ADX, AO y BBWP, y su
-propio control anti-duplicados en `state.json`). Un cambio en una
-temporalidad no afecta ni se mezcla con las demas. Para añadir o quitar
-temporalidades, edita la lista al principio de `koncorde_alert.py`:
 ```python
-INTERVALS = ["1h", "4h", "1d"]
+BITMAN_INTERVALS = ("1h", "4h", "1d")
+KONCORDE_INTERVALS = ("1h", "4h", "1d")
+KONCORDE_OBSERVE_INTERVALS = ("15m",)
+ML_RSI_INTERVALS = ("1h", "1d")
 ```
 
-## Por qué mira la vela en formación (y qué significa "puede repintarse")
+Los sistemas mantienen estados independientes. Una transición de BitMan no modifica el estado de Koncorde ni el de ML RSI.
 
-Los dos sistemas de aviso miran la **última vela que devuelve Binance**,
-que puede estar todavía en curso (no cerrada, actualizándose en vivo) --
-es la única forma de avisar en el instante real en que se produce un
-cambio, en vez de esperar hasta 59 minutos (en la temporalidad de 1h) a
-que la vela termine de cerrar. Replica el comportamiento "Una vez por
-barra" de las alertas nativas de TradingView.
+## 2. Frecuencia de ejecución y tratamiento de velas
 
-La contrapartida: un cruce o un cambio de veredicto puede **repintarse**
--- aparecer y revertirse varias veces antes de que la vela cierre del
-todo, generando avisos que se contradicen entre sí dentro de la misma
-hora/4h/día. Es una decisión deliberada (prioriza la inmediatez sobre la
-limpieza de la señal), no un fallo. Por eso todos los mensajes incluyen el
-aviso "⚠️ Vela todavía en formación, puede repintarse".
+El workflow ejecuta el script cada cinco minutos durante un ciclo de aproximadamente 5 h 40 min y después intenta relanzar el siguiente ciclo mediante la API de GitHub Actions. También conserva un `schedule` diario como red de seguridad.
 
-Al arrancar cada ciclo del bucle (~cada 5h40m), la primera comprobación de
-cada temporalidad y cada sistema solo registra la posición/veredicto base
-sin avisar -- no es un cambio real, es el punto de partida para poder
-detectar cambios a partir de ahí.
+En cada pasada se descargan las temporalidades necesarias de Binance. La clasificación de vela cerrada o en curso se realiza utilizando el `close_time` devuelto por Binance.
 
-## Qué avisos manda
+- **BitMan y Koncorde:** procesan únicamente velas cerradas. Una misma vela no se vuelve a procesar en cada pasada.
+- **ML RSI:** usa la última vela disponible, incluida la vela en curso cuando Binance la devuelve. Por tanto, una transición verde/rojo puede revertirse antes del cierre y el mensaje se marca como provisional.
+- **Koncorde M15:** registra cruces cerrados en el histórico, pero no genera mensajes de Telegram.
 
-Los 2 sistemas (cruces y Bitman) son independientes, pero si **ambos**
-tienen algo nuevo que avisar en la misma temporalidad en la misma pasada,
-se **fusionan en un único mensaje de Telegram** (en vez de mandar uno por
-separado para cada uno). Las 3 temporalidades (1h/4h/1d) siempre van en
-mensajes distintos, para no perder de vista a cuál corresponde cada cosa.
-Al final de cada mensaje hay un resumen con **las 3 temporalidades**
-(la que disparó el aviso, marcada `(esta)`, y las otras 2), combinando el
-estado de los 2 sistemas en una sola línea por temporalidad (ej. `4h:
-Koncorde 🟢 alcista 2/3 · Bitman 🟢 COMPRAR`). "Alcista"/"bajista" llevan
-🟢/🔴 delante -- Telegram no admite texto de color real en mensajes de bot,
-es el sustituto habitual.
+La ejecución cada cinco minutos no significa que todas las temporalidades generen una señal cada cinco minutos: las decisiones de BitMan y Koncorde solo se actualizan cuando hay una nueva vela cerrada en su marco temporal.
 
-### Sistema 1: Cruces del Koncorde
+## 3. BitMan
 
-Cuando `verde` cambia de lado respecto a `media`, se construye un bloque
-con el aviso del cambio y, según cuántas de las 3 condiciones se cumplan,
-un texto adicional fusionado en el mismo bloque:
+BitMan se calcula independientemente en H1, H4 y D1.
 
-1. **Aviso del cambio de posición**, con el desglose de las 3 condiciones
-   en ese mismo bloque:
-   - *Verde entra en la montaña* — cruce al alza de verde sobre media.
-   - *Verde sale de la montaña* — cruce a la baja de verde bajo media.
-2. **Texto adicional**, según cuántas de las 3 condiciones se cumplan:
-   - **3/3 → "CONFIRMADA"**: valor + Trend Speed Analyzer + ADX, las 3 a
-     favor de la misma dirección del cambio.
-   - **2/3 → "PARCIAL"**: solo 2 de las 3 (indica cuál falta).
-   - **0/3 o 1/3 → sin texto adicional** (solo queda el desglose).
+El veredicto implementado utiliza:
 
-Las 3 condiciones:
-- El valor de `verde` en el momento del cambio tiene 3 estados posibles:
-  🟢 **dentro** del rango validado (25-50 alza / ≤-25 baja, cuenta como
-  cumplida), 🟡 **extendido** (fuera del rango pero en la misma dirección —
-  sin ventaja estadística demostrada, pero también cuenta como cumplida,
-  por decisión explícita de aceptar el riesgo de esa falta de evidencia),
-  o 🔴 **dirección contraria** (no cuenta).
-- El **Trend Speed Analyzer (Zeiierman)** confirma la misma dirección
-  (línea dinámica alcista para entradas, bajista para salidas).
-- El **ADX** (fuerza de tendencia, fórmula de Wilder) está por encima de
-  20 y el DI dominante coincide con la dirección del cambio.
+- Awesome Oscillator (AO) 5/34 y su estado.
+- ADX de Wilder y comprobación de si está subiendo.
+- Valor Koncorde (`kon_val`): el mayor entre verde y marrón, salvo cuando ambos son negativos, caso en el que se toma el más negativo.
+- BBWP como información contextual; no bloquea el veredicto.
 
-### Sistema 2: Bitman (COMPRAR / VENDER / ESPERAR)
+Reglas:
 
-Basado en un panel de trading que se compartió como referencia. En vez de
-un cambio de posición puntual, evalúa un **estado** y solo genera bloque
-cuando ese estado **cambia**. Sigue el criterio de 3 pasos descrito para
-leer las señales de ese panel -- tendencia, impulso, confirmación:
+- **COMPRAR:** AO en estado alcista, ADX subiendo y `kon_val` positivo.
+- **VENDER:** AO en estado bajista, ADX subiendo y `kon_val` negativo.
+- **ESPERAR:** cualquier otro caso.
 
-- **COMPRAR**: **tendencia** alcista (AO, Awesome Oscillator 5/34) +
-  **impulso** (ADX subiendo) + **confirmación** (Koncorde "todo el valor",
-  criterio Bitman: el mayor entre `verde`/`marron`, o el más negativo si
-  ambos lo son) en positivo.
-- **VENDER**: lo mismo pero en negativo.
-- **ESPERAR**: cualquier otro caso, con un motivo explicado (sin impulso del
-  ADX, en retroceso del AO, Koncorde sin confirmar, etc.).
+El aviso se genera cuando cambia el veredicto respecto al último estado guardado. La primera lectura establece una referencia y no genera una alerta retrospectiva.
 
-El **BBWP** (volatilidad, 4º punto de ese criterio) es informativo en el
-panel original y no participa en la lógica COMPRAR/VENDER/ESPERAR -- por
-eso aquí tampoco se usa como condición que bloquea o cuenta, pero sí se
-incluye como **línea informativa** en cada bloque de Bitman (percentil de
-anchura de Bandas de Bollinger, clasificación idéntica a la del panel
-original, 5 niveles): **≤2%** extremo bajo, **<25%** baja/compresión,
-**<75%** media/normal, **<98%** alta (posible entrada tardía), **≥98%**
-extremo alto.
+Esta implementación mantiene el criterio BitMan ya presente en el script original; no incorpora filtros Pro de temporalidad superior, solo-largo ni asignación de capital.
 
-Es la versión "Base" de ese panel — no incluye el filtro solo-largo, el
-filtro de temporalidad superior encadenado (1h exige 4h y 1d alcistas a la
-vez) ni el modelo de asignación de capital de la versión "Pro" del panel
-original, para mantener el alcance similar al resto del sistema.
+## 4. Koncorde
 
-## Cómo se ajustaron los rangos de valor
+Koncorde operativo se calcula en H1, H4 y D1. El sistema detecta un cambio de posición de `verde` respecto a `media` comparando velas cerradas consecutivas.
 
-El rango del filtro de `verde` empezó siendo una suposición (0-50 para alza,
-venía de una formación externa; -50/0 para baja, una extrapolación propia
-sin base real). Se validó con `analisis_valor_verde.py`, que descarga
-histórico real de BTCUSDT y mide, para cada cruce pasado (sobre velas ya
-cerradas), si el precio se movió a favor en las siguientes 24h, agrupado
-por rango de valor. Con casi todo el histórico disponible de Binance (~10
-años, miles de cruces):
+Al detectar un cruce evalúa tres condiciones:
 
-- **Alza**: el rango 25-50 rindió consistentemente mejor (~55-56% de
-  aciertos) que 0-25 o >50 (~49-51%, indistinguible del azar), en 3
-  muestras de tamaño creciente (2, 6 y 10 años).
-- **Baja**: resultó ser justo lo contrario a lo asumido — cruces con
-  `verde <= -25` rindieron mejor (~63-68% de aciertos) que cruces cerca de
-  0, que rindieron peor que el azar (~40%). Por eso "baja" no tiene límite
-  inferior.
+1. **Valor verde.** Para alza, el rango validado es 25–50. Para baja, el rango validado es ≤ -25. Un valor fuera de ese rango pero con el signo correcto se clasifica como extendido y sigue contando como condición cumplida, igual que en la lógica previa.
+2. **Trend Speed Analyzer (TSA).** Debe apuntar en la dirección del cruce.
+3. **ADX/DI.** ADX debe ser ≥ 20 y el DI dominante debe coincidir con la dirección del cruce.
 
-La muestra de "baja" es bastante más pequeña que la de "alza" (decenas de
-casos frente a más de mil), así que esa señal tiene menos respaldo
-estadístico aunque el patrón fue consistente en las 3 mediciones. Y como
-con cualquier análisis histórico: rendimiento pasado no garantiza nada
-hacia adelante. **Importante**: este análisis se hizo sobre cruces YA
-CERRADOS -- no hay garantía de que los mismos umbrales se comporten igual
-de bien sobre los cruces intra-vela que genera ahora el sistema en vivo.
-Para relanzar el análisis (por ejemplo si quieres probar otro horizonte de
-medida, no solo 24h): **Actions -> Analisis Valor Verde -> Run workflow**.
+Resultado:
 
-## Puesta en marcha (una sola vez)
+- **3/3:** alerta confirmada.
+- **2/3:** alerta parcial.
+- **0/3 o 1/3:** el cruce se registra, pero no genera alerta de Telegram.
 
-1. **Crea un repositorio nuevo y público** en GitHub.
-2. Sube estos archivos manteniendo la estructura de carpetas:
-   ```
-   .github/workflows/koncorde.yml
-   koncorde_alert.py
-   requirements.txt
-   state.json
-   ```
-   (En GitHub: "Add file" -> "Upload files", arrastra la carpeta, o usa git
-   desde tu ordenador si prefieres. Para el archivo dentro de
-   `.github/workflows/` usa "Add file" -> "Create new file" y escribe la
-   ruta completa.)
-3. Ve a **Settings -> Secrets and variables -> Actions -> New repository secret**
-   y crea dos secrets:
-   - `TELEGRAM_TOKEN` -> el token de tu bot
-   - `TELEGRAM_CHAT_ID` -> tu chat_id
-4. Ve a la pestaña **Actions** del repositorio. Si te pregunta, habilita los
-   workflows.
-5. **Actions -> Koncorde Alert -> Run workflow**. Esto arranca la primera
-   cadena, que se mantendrá viva sola de ahí en adelante (verás el círculo
-   amarillo de "en curso" durante ~5h40m antes de que se relance sola).
+Los umbrales de valor verde proceden del análisis histórico previo documentado en la versión original. Ese análisis se realizó con cruces cerrados de BTCUSDT y no garantiza resultados futuros.
 
-## Comprobar que sigue viva
+### M15 en observación
 
-Entra en la pestaña Actions:
-- Si hay una ejecución con el círculo amarillo girando ("en curso"), está
-  funcionando.
-- Si la última ejecución terminó (check verde) y hay otra nueva justo
-  después, también está funcionando: se relanzó sola.
-- Si la última ejecución terminó y no hay ninguna después de varias horas,
-  algo falló — revisa el log del último paso ("Relanzar el siguiente
-  ciclo") o simplemente vuelve a darle a "Run workflow" para reiniciar la
-  cadena manualmente.
+M15 utiliza el mismo cálculo de Koncorde y filtros para registrar los cruces cerrados. Se guarda como observación, sin avisos a Telegram. Su finalidad es estudiar si aporta anticipación respecto a H1 antes de decidir si debe convertirse en un marco operativo.
 
-## Cambiar de par o de temporalidades
+### Control del ruido
 
-Edita en `koncorde_alert.py`:
+La confirmación al cierre evita las oscilaciones intravela del cruce. Esta versión no introduce todavía umbrales adicionales de histéresis, distancia mínima entre líneas ni persistencia de varias velas. Esos parámetros deben estudiarse con el histórico antes de fijarlos.
+
+## 5. ML RSI
+
+ML RSI funciona de forma independiente en H1 y D1.
+
+La fórmula conservada es:
+
+- RSI de Wilder de longitud 27 calculado sobre el mínimo de la vela.
+- Suavizado SMA(4).
+- K-means unidimensional con tres centroides para obtener umbrales dinámicos.
+- Clasificación verde, rojo o gris.
+
+El sistema compara la clasificación viva con el último estado guardado:
+
+- Al cambiar a **verde**, envía aviso.
+- Al cambiar a **rojo**, envía aviso.
+- Al cambiar a **gris**, actualiza el estado, pero no envía aviso.
+
+Los avisos verde/rojo sobre una vela abierta se identifican como **PROVISIONAL**. El sistema registra también la clasificación de la última vela cerrada para permitir el análisis posterior.
+
+## 6. Persistencia: estado e histórico
+
+Se utilizan dos archivos distintos:
+
+### `state.json`
+
+Guarda el estado operativo, entre otros:
+
+- Última vela procesada por sistema y temporalidad.
+- Último veredicto BitMan.
+- Última posición Koncorde.
+- Última clasificación viva y última vela cerrada de ML RSI.
+- Identificadores recientes de eventos históricos.
+- Señales pendientes de completar con resultados posteriores.
+
+Se escribe de forma atómica para reducir el riesgo de dejar un JSON incompleto durante una interrupción.
+
+### `signals_history.jsonl`
+
+Es un histórico acumulativo en formato JSON Lines: cada línea es un objeto JSON independiente. Incluye:
+
+- Sistema y temporalidad.
+- Tipo de evento y señal.
+- Estado confirmado, parcial, provisional u observación.
+- Hora UTC y precio de referencia.
+- Valores de indicadores y filtros disponibles.
+- Identificador de evento para relacionar registros posteriores.
+
+Los resultados posteriores se añaden como nuevos registros asociados al evento original; no se reescribe la línea de señal inicial.
+
+### Seguimiento a futuro
+
+El código contempla horizontes de 1, 3, 6, 12 y 24 horas. La medición se realiza en la primera ejecución posterior en la que se alcanza o supera cada horizonte, usando el precio H1 disponible en esa pasada. Por ello, no debe interpretarse como un precio exacto del segundo en que se cumple el horizonte.
+
+El rendimiento porcentual registrado es el cambio de precio desde el precio de referencia. Para señales alcistas y bajistas se incluye una marca de acierto direccional. No se descuentan comisiones, spread, deslizamiento ni costes de ejecución; no es un backtest de una estrategia ejecutable.
+
+## 7. GitHub Actions y conservación de datos
+
+El workflow debe versionar ambos archivos en cada ciclo:
+
+```bash
+git add state.json signals_history.jsonl
+```
+
+El flujo realiza `git pull --rebase` antes de crear el commit y después intenta subirlo a la rama del workflow. Si falla la sincronización, hay riesgo de que los cambios del runner no lleguen al siguiente ciclo; hay que revisar los logs de `pull` y `push`.
+
+Permisos declarados por el workflow:
+
+- `contents: write`, para guardar estado e histórico en el repositorio.
+- `actions: write`, para solicitar el siguiente ciclo.
+
+El repositorio debe tener habilitados GitHub Actions y los permisos de escritura necesarios para el `GITHUB_TOKEN`. La disponibilidad de minutos gratuitos depende de si el repositorio es público o privado y de las condiciones vigentes de GitHub.
+
+## 8. Instalación
+
+1. Haz una copia de seguridad del script y workflow actuales.
+2. Sustituye el archivo del repositorio `koncorde_alert.py` por el script preparado, renombrándolo exactamente a `koncorde_alert.py`.
+3. Sustituye `.github/workflows/koncorde.yml` por el workflow preparado, conservando esa ruta.
+4. Comprueba que `requirements.txt` incluye al menos `requests`, `pandas` y `numpy`.
+5. En GitHub, abre **Settings → Secrets and variables → Actions** y verifica estos secrets:
+   - `TELEGRAM_TOKEN`
+   - `TELEGRAM_CHAT_ID`
+6. Comprueba que el workflow tiene permisos de escritura para Contents y Actions.
+7. Ejecuta **Actions → Koncorde Alert → Run workflow** manualmente.
+8. Revisa los logs, los mensajes de Telegram, y que `state.json` y `signals_history.jsonl` se creen o actualicen y queden commiteados.
+9. Solo después de verificar varios ciclos, deja activa la cadena de auto-relanzamiento.
+
+No introduzcas las credenciales de Telegram directamente en el código ni en el README.
+
+## 9. Validación antes de producción
+
+La validación pendiente debe cubrir, como mínimo:
+
+- Descarga real de H1, H4, D1 y M15 desde Binance.
+- Que las velas abiertas no se procesan como cerradas para BitMan/Koncorde.
+- Que una vela cerrada no dispara el mismo evento en dos pasadas.
+- Que ML RSI H1 y D1 detectan transiciones vivas y no envían alertas al pasar a gris.
+- Que M15 escribe observaciones y nunca envía alertas.
+- Que un reinicio recupera el estado y no duplica eventos.
+- Que el histórico se conserva tras `git pull`/`git push`.
+- Que los resultados a 1/3/6/12/24 h se añaden una sola vez.
+- Que los mensajes HTML son aceptados por Telegram.
+
+La prueba de compilación sintáctica, por sí sola, no cubre estos casos. No debe considerarse una validación integral ni una garantía de funcionamiento en producción.
+
+## 10. Reversión
+
+Si la nueva versión presenta problemas:
+
+1. Detén o desactiva temporalmente el workflow.
+2. Restaura la copia de seguridad de `koncorde_alert.py` y `.github/workflows/koncorde.yml`.
+3. Conserva una copia de `signals_history.jsonl` antes de revertir, para no perder los registros acumulados.
+4. Revisa el último log de Actions y el estado de los commits antes de reactivar la cadena.
+
+## 11. Configuración principal
+
+Símbolo:
+
 ```python
 SYMBOL = "BTCUSDT"
-INTERVALS = ["1h", "4h", "1d"]
 ```
-Y en `.github/workflows/koncorde.yml`, la línea `sleep 300` (segundos =
-5 min) dentro del bucle, si quieres otra frecuencia de chequeo.
 
-## Notas
+Temporalidades por sistema:
 
-- `state.json` guarda, por separado, la última posición/veredicto conocido
-  de cada temporalidad y sistema (posición del cruce + veredicto Bitman =
-  2 tipos × 3 temporalidades = hasta 6 claves), para avisar solo en los
-  cambios reales. El propio workflow lo actualiza y lo commitea solo, no lo
-  toques a mano.
-- La fórmula del Koncorde usada es una reconstrucción de código abierto de
-  la comunidad (la versión 2.0 oficial de Blai5 es código cerrado), así que
-  puede haber pequeñas diferencias frente a TradingView, aunque los cruces
-  deberían coincidir en la gran mayoría de los casos.
-- El Trend Speed Analyzer y el ADX sí son réplicas exactas de sus fórmulas
-  originales (Trend Speed Analyzer: Zeiierman, CC BY-NC-SA 4.0; ADX: fórmula
-  estándar de Wilder / `ta.dmi` de Pine), no aproximaciones.
-- Las 3 peticiones a Binance de cada pasada (una por temporalidad,
-  compartida entre los 2 sistemas de aviso) reutilizan la misma conexión
-  HTTPS (`requests.Session`).
+```python
+BITMAN_INTERVALS = ("1h", "4h", "1d")
+KONCORDE_INTERVALS = ("1h", "4h", "1d")
+KONCORDE_OBSERVE_INTERVALS = ("15m",)
+ML_RSI_INTERVALS = ("1h", "1d")
+```
+
+La frecuencia del bucle está definida en el workflow mediante `sleep 300` (cinco minutos).
