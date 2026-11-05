@@ -24,22 +24,22 @@
   "last_mlrsi_1h": "gris",
   "last_mlrsi_4h": "gris",
   "last_mlrsi_1d": "gris",
-  "bitman_last_candle_1h": "1793861999999",
+  "bitman_last_candle_1h": "1793865599999",
   "bitman_last_signal_1h": "ESPERAR",
-  "bitman_last_candle_4h": "1793851199999",
+  "bitman_last_candle_4h": "1793865599999",
   "bitman_last_signal_4h": "COMPRAR",
   "bitman_last_candle_1d": "1793836799999",
   "bitman_last_signal_1d": "ESPERAR",
-  "koncorde_last_candle_1h": "1793861999999",
+  "koncorde_last_candle_1h": "1793865599999",
   "koncorde_last_position_1h": "baja",
-  "koncorde_last_candle_4h": "1793851199999",
+  "koncorde_last_candle_4h": "1793865599999",
   "koncorde_last_position_4h": "alza",
   "koncorde_last_candle_1d": "1793836799999",
   "koncorde_last_position_1d": "baja",
-  "koncorde_last_candle_15m": "1793864699999",
+  "koncorde_last_candle_15m": "1793865599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "gris",
-  "ml_rsi_last_closed_candle_1h": "1793861999999",
+  "ml_rsi_last_closed_candle_1h": "1793865599999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -69,7 +69,8 @@
     "e6f62e3b0123f5331e8167e2",
     "f4ba40b6fee15d4247c4f233",
     "f84603e9358465c75087bbdb",
-    "6e3c0c21b15c192a1941974d"
+    "6e3c0c21b15c192a1941974d",
+    "679cf21bd088820d090ef676"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -96,6 +97,11 @@
           "observed_time_ms": 1793844002378,
           "observed_price": 80679.92,
           "return_pct": 0.852673
+        },
+        "12h": {
+          "observed_time_ms": 1793865839239,
+          "observed_price": 80394.0,
+          "return_pct": 0.495264
         }
       }
     },
