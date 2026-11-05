@@ -386,21 +386,35 @@ def compute_bbwp(df: pd.DataFrame, length: int = 13, lookback: int = 252,
 
 
 def bbwp_texto(bbwp_val: float) -> str:
-    """Clasificacion identica a la del panel original (5 niveles, no una
-    simplificacion): <=2 Extremo bajo, <25 Baja, <75 Media, <98 Alta,
-    resto Extremo alto."""
+    """Clasificación BBWP en cinco niveles; es contexto, no filtro de entrada."""
     if pd.isna(bbwp_val):
-        return "BBWP: sin datos suficientes todavia"
+        return "🌫️ BBWP: sin datos suficientes"
     if bbwp_val <= 2:
-        return f"BBWP: {bbwp_val:.0f}% (extremo bajo -- compresion muy fuerte, expansion probablemente inminente)"
+        return f"🧊 BBWP: {bbwp_val:.0f}% · extremo bajo (compresión muy fuerte; posible expansión)"
     elif bbwp_val < 25:
-        return f"BBWP: {bbwp_val:.0f}% (baja -- compresion, posible expansion proxima)"
+        return f"🔵 BBWP: {bbwp_val:.0f}% · bajo (compresión; posible expansión próxima)"
     elif bbwp_val < 75:
-        return f"BBWP: {bbwp_val:.0f}% (media -- volatilidad normal)"
+        return f"🟡 BBWP: {bbwp_val:.0f}% · medio (volatilidad normal)"
     elif bbwp_val < 98:
-        return f"BBWP: {bbwp_val:.0f}% (alta -- volatilidad ya elevada antes de la señal, posible entrada tardia)"
+        return f"🟠 BBWP: {bbwp_val:.0f}% · alto (volatilidad elevada; posible entrada tardía)"
     else:
-        return f"BBWP: {bbwp_val:.0f}% (extremo alto -- volatilidad extrema, alto riesgo de entrada muy tardia)"
+        return f"🔴 BBWP: {bbwp_val:.0f}% · extremo (volatilidad extrema; riesgo elevado de entrada tardía)"
+
+
+def bitman_icono(signal: str) -> str:
+    """Icono visual para el estado BitMan."""
+    return {"COMPRAR": "🟢", "VENDER": "🔴", "ESPERAR": "⏸️"}.get(str(signal).upper(), "⚪")
+
+
+def ao_icono(estado: str) -> str:
+    estado = str(estado or "").lower()
+    if "alcista" in estado:
+        return "📈"
+    if "bajista" in estado:
+        return "📉"
+    if "retroceso" in estado:
+        return "↩️"
+    return "➖"
 
 
 
@@ -1143,6 +1157,8 @@ def _process_bitman(interval: str, df_ver: pd.DataFrame, state: dict):
             f"ADX={_safe_float(row['adx']):.1f}; {bbwp_texto(row['bbwp'])}"
         )
         return
+    if interval == "1h":
+        _resolve_provisional_at_close("bitman", interval, candle, signal, state)
 
     if previous is None:
         state[key_candle] = candle
@@ -1171,12 +1187,14 @@ def _process_bitman(interval: str, df_ver: pd.DataFrame, state: dict):
     event_ms = int(pd.Timestamp(row["close_time"]).timestamp() * 1000)
     block = (
         f"<b>BITMAN {SYMBOL} {interval.upper()}</b>\n"
-        f"<b>{previous} → {signal}</b>\n{reason}\n"
-        f"AO: {_safe_float(row['ao']):.1f} ({row['ao_estado']})\n"
-        f"Koncorde: {_safe_float(row['kon_val']):.1f} · "
-        f"ADX: {_safe_float(row['adx']):.1f}\n"
+        f"<b>{bitman_icono(previous)} {previous} → "
+        f"{bitman_icono(signal)} {signal}</b>\n"
+        f"{reason}\n"
+        f"{ao_icono(row.get('ao_estado'))} AO: {_safe_float(row['ao']):.1f} ({row['ao_estado']})\n"
+        f"📊 Koncorde: {_safe_float(row['kon_val']):.1f} · "
+        f"💪 ADX: {_safe_float(row['adx']):.1f}\n"
         f"{bbwp_texto(row['bbwp'])}\n"
-        f"<b>Cierre: {float(row['close']):.2f}</b>"
+        f"💶 <b>Cierre: {float(row['close']):.2f}</b>"
     )
     _send_block(block)
     state[key_candle] = candle
@@ -1215,6 +1233,9 @@ def _process_koncorde(interval: str, df: pd.DataFrame, state: dict,
         return
     prev_pos = "alza" if float(prev["verde"]) > float(prev["media"]) else "baja"
     pos = "alza" if float(row["verde"]) > float(row["media"]) else "baja"
+    provisional_resolved = _resolve_provisional_at_close(
+        "koncorde", interval, candle, pos, row, state
+    )
     if pos == prev_pos:
         state[key_candle] = candle
         state[f"koncorde_last_position_{interval}"] = pos
@@ -1256,9 +1277,19 @@ def _process_koncorde(interval: str, df: pd.DataFrame, state: dict,
         print(f"[KONCORDE {interval}] Observación M15: cruce {direction}, {n_ok}/3.")
         return
     if n_ok < 2:
+        if not provisional_resolved:
+            c["di_plus"] = _safe_float(row.get("di_plus"))
+            c["di_minus"] = _safe_float(row.get("di_minus"))
+            _send_block(
+                f"<b>KONCORDE {SYMBOL} {interval.upper()} · NO CONFIRMADA</b>\n"
+                f"<b>Cruce {direction} al cierre</b>\n"
+                f"Precio de cierre: {float(row['close']):.2f}\n"
+                f"{_format_koncorde_filters(c)}\n"
+                f"<i>Se requieren al menos 2/3 condiciones.</i>"
+            )
         state[key_candle] = candle
         state[f"koncorde_last_position_{interval}"] = pos
-        print(f"[KONCORDE {interval}] Cruce {direction}, solo {n_ok}/3; registrado sin Telegram.")
+        print(f"[KONCORDE {interval}] Cruce {direction}, solo {n_ok}/3; no confirmado.")
         return
 
     icon = "🟢" if pos == "alza" else "🔴"
@@ -1282,7 +1313,8 @@ def _process_koncorde(interval: str, df: pd.DataFrame, state: dict,
         f"(≥{ADX_MEDIO:.0f} y DI dominante a favor)\n"
         f"<b>{confirmation}</b>"
     )
-    _send_block(block)
+    if not provisional_resolved:
+        _send_block(block)
     state[key_candle] = candle
     state[f"koncorde_last_position_{interval}"] = pos
     # Actualiza telegram_sent en un evento de confirmación separado para que
@@ -1292,9 +1324,216 @@ def _process_koncorde(interval: str, df: pd.DataFrame, state: dict,
         kind="telegram_alert", signal=f"{direction}_{n_ok}of3",
         price=float(row["close"]), event_time_ms=event_ms,
         status=status, indicators={"source_event_id": eid, "filters": n_ok},
-        telegram_sent=True,
+        telegram_sent=not provisional_resolved,
     )
     _store_trackable(state, eid, "koncorde", interval, direction, event_ms, float(row["close"]))
+
+
+
+def _process_bitman_provisional(interval: str, df_live_ver: pd.DataFrame, state: dict):
+    """Detecta transiciones BitMan en la vela viva. Una alerta por dirección
+    y vela; la confirmación/invalidez se registra cuando cierra esa vela."""
+    if df_live_ver.empty:
+        return
+    row = df_live_ver.iloc[-1]
+    candle = _candle_id(row)
+    signal = str(row["veredicto"])
+    key_candle = f"bitman_provisional_candle_{interval}"
+    key_signal = f"bitman_provisional_signal_{interval}"
+    key_sent = f"bitman_provisional_sent_{interval}"
+
+    if state.get(key_candle) != candle:
+        state[key_candle] = candle
+        state[key_signal] = state.get(f"bitman_last_signal_{interval}", signal)
+        state[key_sent] = []
+    previous = state.get(key_signal)
+    if previous == signal:
+        print(
+            f"[BITMAN {interval} PROVISIONAL] Sin cambio: {signal}; "
+            f"AO={_safe_float(row['ao']):.1f} ({row['ao_estado']}); "
+            f"Koncorde={_safe_float(row['kon_val']):.1f}; "
+            f"ADX={_safe_float(row['adx']):.1f}; {bbwp_texto(row['bbwp'])}"
+        )
+        return
+
+    state[key_signal] = signal
+    now_ms = _utc_now_ms()
+    if signal in ("COMPRAR", "VENDER"):
+        sent = state.setdefault(key_sent, [])
+        if signal not in sent:
+            direction = "alcista" if signal == "COMPRAR" else "bajista"
+            block = (
+                f"<b>BITMAN {SYMBOL} {interval.upper()} · 🟠 PROVISIONAL</b>\n"
+                f"<b>{bitman_icono(previous)} {previous} → "
+                f"{bitman_icono(signal)} {signal}</b>\n"
+                f"Señal intravela; puede cambiar antes del cierre.\n"
+                f"{ao_icono(row.get('ao_estado'))} AO: {_safe_float(row['ao']):.1f} ({row['ao_estado']})\n"
+                f"📊 Koncorde: {_safe_float(row['kon_val']):.1f} · "
+                f"💪 ADX: {_safe_float(row['adx']):.1f}\n"
+                f"{bbwp_texto(row['bbwp'])}\n"
+                f"💶 <b>Precio en vivo: {float(row['close']):.2f}</b>"
+            )
+            _send_block(block)
+            eid = _record_event(
+                state, system="bitman", interval=interval,
+                kind="intrabar_transition", signal=signal,
+                price=float(row["close"]), event_time_ms=now_ms,
+                status="provisional", indicators=_indicators_for_history(row),
+                telegram_sent=True,
+            )
+            _store_trackable(state, eid, "bitman", interval, signal, now_ms, float(row["close"]))
+            sent.append(signal)
+            print(f"[BITMAN {interval}] Transición intravela {previous} → {signal}: Telegram enviado.")
+    elif previous in ("COMPRAR", "VENDER"):
+        _record_event(
+            state, system="bitman", interval=interval,
+            kind="intrabar_invalidation", signal=previous,
+            price=float(row["close"]), event_time_ms=now_ms,
+            status="invalidated", indicators=_indicators_for_history(row),
+            telegram_sent=False,
+        )
+        print(f"[BITMAN {interval}] Señal provisional {previous} retirada; estado actual ESPERAR.")
+
+
+def _format_koncorde_filters(c: dict) -> str:
+    """Detalle legible y completo de los tres filtros Koncorde."""
+    value_icon = "✅" if c["valor_ok"] else "❌"
+    tsa_icon = "✅" if c["tsa_ok"] else "❌"
+    adx_icon = "✅" if c["adx_ok"] else "❌"
+    tsa_direction = "alcista" if c["tsa_bullish"] else "bajista"
+    di_plus = float(c.get("di_plus", 0.0))
+    di_minus = float(c.get("di_minus", 0.0))
+    return (
+        f"Valor verde: {float(c['verde_val']):.2f} {ICONO_VALOR[c['valor_estado']]} "
+        f"({TEXTO_VALOR[c['valor_estado']]}) {value_icon}\n"
+        f"TSA: {tsa_direction} {tsa_icon}\n"
+        f"ADX: {float(c['adx_val']):.1f} (umbral ≥{ADX_MEDIO:.0f}) · "
+        f"DI+: {di_plus:.1f} · DI−: {di_minus:.1f} {adx_icon}\n"
+        f"<b>Condiciones favorables: {int(c['n_ok'])}/3</b>"
+    )
+
+
+def _process_koncorde_provisional(interval: str, df_live: pd.DataFrame, state: dict):
+    """Notifica cada cruce intravela, sin filtrar por el resultado 0/3–3/3.
+    Cada transición queda registrada para resolverla al cierre de esa vela."""
+    if df_live.empty or len(df_live) < 2:
+        return
+    row, prev = df_live.iloc[-1], df_live.iloc[-2]
+    candle = _candle_id(row)
+    pos = "alza" if float(row["verde"]) > float(row["media"]) else "baja"
+    prev_pos = "alza" if float(prev["verde"]) > float(prev["media"]) else "baja"
+    key_candle = f"koncorde_provisional_candle_{interval}"
+    key_pos = f"koncorde_provisional_position_{interval}"
+    key_events = f"koncorde_provisional_events_{interval}"
+
+    if state.get(key_candle) != candle:
+        state[key_candle] = candle
+        state[key_pos] = state.get(f"koncorde_last_position_{interval}", prev_pos)
+        state[key_events] = []
+    previous = state.get(key_pos, prev_pos)
+    if pos == previous:
+        print(
+            f"[KONCORDE {interval} PROVISIONAL] Sin cruce nuevo; posición={pos}; "
+            f"verde={float(row['verde']):.2f}; media={float(row['media']):.2f}."
+        )
+        return
+
+    state[key_pos] = pos
+    direction = "alcista" if pos == "alza" else "bajista"
+    c = evaluar_condiciones_koncorde(row, pos)
+    # Completar DI para que los tres filtros sean transparentes en Telegram.
+    c["di_plus"] = _safe_float(row.get("di_plus"))
+    c["di_minus"] = _safe_float(row.get("di_minus"))
+    now_ms = _utc_now_ms()
+    event_id = _record_event(
+        state, system="koncorde", interval=interval,
+        kind="intrabar_cross", signal=direction,
+        price=float(row["close"]), event_time_ms=now_ms,
+        status="provisional", indicators={
+            **_indicators_for_history(row),
+            "filters": {
+                "value_ok": bool(c["valor_ok"]), "tsa_ok": bool(c["tsa_ok"]),
+                "adx_ok": bool(c["adx_ok"]), "n_ok": int(c["n_ok"]),
+                "value_state": c["valor_estado"],
+            },
+        }, telegram_sent=True,
+    )
+    block = (
+        f"<b>KONCORDE {SYMBOL} {interval.upper()} · PROVISIONAL</b>\n"
+        f"<b>{'🟢' if pos == 'alza' else '🔴'} Cruce {direction.upper()} intravela</b>\n"
+        f"Precio en vivo: {float(row['close']):.2f}\n"
+        f"Verde: {float(row['verde']):.2f} · Media: {float(row['media']):.2f}\n"
+        f"{_format_koncorde_filters(c)}\n"
+        f"<i>Lectura provisional; puede revertirse antes del cierre.</i>"
+    )
+    _send_block(block)
+    state.setdefault(key_events, []).append({
+        "event_id": event_id, "position": pos, "direction": direction,
+        "event_time_ms": now_ms, "price": float(row["close"]),
+    })
+    print(f"[KONCORDE {interval}] Cruce intravela {direction}, filtros {c['n_ok']}/3: Telegram enviado.")
+
+
+def _resolve_provisional_at_close(system: str, interval: str, candle: str,
+                                  closed_signal: str, row=None, state: dict | None = None) -> bool:
+    """Emite resolución por cada cruce provisional de la vela que acaba de cerrar.
+    Devuelve True si había alertas provisionales ya notificadas."""
+    if system != "koncorde" or state is None or row is None:
+        # BitMan conserva su propia resolución y no utiliza este flujo de Koncorde.
+        return False
+    key_candle = f"koncorde_provisional_candle_{interval}"
+    key_events = f"koncorde_provisional_events_{interval}"
+    if state.get(key_candle) != candle:
+        return False
+    events = state.get(key_events, [])
+    if not events:
+        return False
+
+    final_pos = closed_signal
+    c = evaluar_condiciones_koncorde(row, final_pos)
+    c["di_plus"] = _safe_float(row.get("di_plus"))
+    c["di_minus"] = _safe_float(row.get("di_minus"))
+    final_direction = "alcista" if final_pos == "alza" else "bajista"
+    event_ms = int(pd.Timestamp(row["close_time"]).timestamp() * 1000)
+    for event in events:
+        matched = event["position"] == final_pos
+        if not matched:
+            status = "invalidated"
+            heading = "INVALIDADA"
+            explanation = f"El cruce {event['direction']} no se mantuvo al cierre; posición final {final_direction}."
+        elif int(c["n_ok"]) >= 2:
+            status = "confirmed"
+            heading = "CONFIRMADA"
+            explanation = f"El cruce {final_direction} se mantiene al cierre y cumple {int(c['n_ok'])}/3 condiciones."
+        else:
+            status = "unconfirmed"
+            heading = "NO CONFIRMADA"
+            explanation = f"El cruce {final_direction} se mantiene, pero solo cumple {int(c['n_ok'])}/3 condiciones; se requieren al menos 2/3."
+        _record_event(
+            state, system="koncorde", interval=interval,
+            kind="provisional_resolution", signal=event["direction"],
+            price=float(row["close"]), event_time_ms=event_ms,
+            status=status, indicators={
+                "source_event_id": event["event_id"],
+                "provisional_position": event["position"],
+                "closed_position": final_pos,
+                "filters": {"value_ok": bool(c["valor_ok"]),
+                            "tsa_ok": bool(c["tsa_ok"]),
+                            "adx_ok": bool(c["adx_ok"]), "n_ok": int(c["n_ok"]),
+                            "value_state": c["valor_estado"]},
+            }, telegram_sent=True,
+        )
+        block = (
+            f"<b>KONCORDE {SYMBOL} {interval.upper()} · {heading}</b>\n"
+            f"<b>{'🟢' if final_pos == 'alza' else '🔴'} {explanation}</b>\n"
+            f"Precio de cierre: {float(row['close']):.2f}\n"
+            f"Verde: {float(row['verde']):.2f} · Media: {float(row['media']):.2f}\n"
+            f"{_format_koncorde_filters(c)}"
+        )
+        _send_block(block)
+        print(f"[KONCORDE {interval}] Cruce provisional {event['direction']}: {heading}.")
+    state[key_events] = []
+    return True
 
 
 def _process_ml_rsi(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFrame,
@@ -1416,10 +1655,18 @@ def main():
             df_closed = compute_veredicto(df_closed)
             source_for_ml = pd.concat([closed.tail(ML_RSI_MAX_DATA), live], ignore_index=True) if not live.empty else closed.copy()
             df_ml = compute_ml_rsi(source_for_ml.copy()) if interval in ML_RSI_INTERVALS else None
+            df_live_calc = None
+            if interval in KONCORDE_INTERVALS and not live.empty:
+                live_source = pd.concat([closed.tail(LOOKBACK), live], ignore_index=True)
+                df_live_calc = compute_koncorde(live_source.copy())
+                df_live_calc = compute_trend_speed(df_live_calc)
+                df_live_calc = compute_adx(df_live_calc)
+                df_live_calc = compute_veredicto(df_live_calc)
             market[interval] = {
                 "closed": df_closed,
                 "live": live,
                 "ml": df_ml,
+                "live_calc": df_live_calc,
             }
             print(
                 f"[DATOS {interval}] OK: {len(closed)} velas cerradas; "
@@ -1446,6 +1693,23 @@ def main():
                 _process_koncorde(interval, market[interval]["closed"], state, False)
             except Exception as exc:
                 print(f"[KONCORDE {interval}] [ERROR] {exc}")
+
+    # Koncorde H1/H4/D1: detectar cada cruce intravela en cada ciclo de 5 min.
+    for interval in KONCORDE_INTERVALS:
+        live_calc = market.get(interval, {}).get("live_calc")
+        if live_calc is not None and not live_calc.empty:
+            try:
+                _process_koncorde_provisional(interval, live_calc, state)
+            except Exception as exc:
+                print(f"[KONCORDE {interval} PROVISIONAL] [ERROR] {exc}")
+
+    # BitMan conserva su comportamiento provisional exclusivamente en H1.
+    h1_live_calc = market.get("1h", {}).get("live_calc")
+    if h1_live_calc is not None and not h1_live_calc.empty:
+        try:
+            _process_bitman_provisional("1h", h1_live_calc, state)
+        except Exception as exc:
+            print(f"[BITMAN 1h PROVISIONAL] [ERROR] {exc}")
 
     # M15: cruces cerrados registrados, nunca enviados a Telegram.
     for interval in KONCORDE_OBSERVE_INTERVALS:
