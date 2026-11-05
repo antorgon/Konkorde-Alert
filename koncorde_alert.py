@@ -877,6 +877,8 @@ def calcular_temporalidad(interval: str):
 
 
 def main():
+    cycle_started = pd.Timestamp.now(tz="UTC").isoformat()
+    print(f"========== INICIO DE CICLO {cycle_started} ==========", flush=True)
     state = load_state()
     dfs, dfs_ver, dfs_ml = {}, {}, {}
 
@@ -1130,10 +1132,17 @@ def _process_bitman(interval: str, df_ver: pd.DataFrame, state: dict):
     candle = _candle_id(row)
     key_candle = f"bitman_last_candle_{interval}"
     key_signal = f"bitman_last_signal_{interval}"
-    if state.get(key_candle) == candle:
-        return
     signal = str(row["veredicto"])
     previous = state.get(key_signal)
+    if state.get(key_candle) == candle:
+        print(
+            f"[BITMAN {interval}] Sin cambio: {previous or signal}; "
+            f"última vela cerrada={candle}; cierre={float(row['close']):.2f}; "
+            f"AO={_safe_float(row['ao']):.1f}; "
+            f"Koncorde={_safe_float(row['kon_val']):.1f}; "
+            f"ADX={_safe_float(row['adx']):.1f}; {bbwp_texto(row['bbwp'])}"
+        )
+        return
 
     if previous is None:
         state[key_candle] = candle
@@ -1143,8 +1152,16 @@ def _process_bitman(interval: str, df_ver: pd.DataFrame, state: dict):
     if signal == previous:
         state[key_candle] = candle
         state[key_signal] = signal
+        print(
+            f"[BITMAN {interval}] Nueva vela cerrada, sin cambio de señal: "
+            f"{signal}; cierre={float(row['close']):.2f}; "
+            f"AO={_safe_float(row['ao']):.1f} ({row['ao_estado']}); "
+            f"Koncorde={_safe_float(row['kon_val']):.1f}; "
+            f"ADX={_safe_float(row['adx']):.1f}; {bbwp_texto(row['bbwp'])}"
+        )
         return
 
+    print(f"[BITMAN {interval}] Transición confirmada al cierre: {previous} → {signal}.")
     if signal == "COMPRAR":
         reason = "AO alcista + ADX creciente + Koncorde positivo"
     elif signal == "VENDER":
@@ -1181,6 +1198,13 @@ def _process_koncorde(interval: str, df: pd.DataFrame, state: dict,
     candle = _candle_id(row)
     key_candle = f"koncorde_last_candle_{interval}"
     if state.get(key_candle) == candle:
+        pos_now = "alza" if float(row["verde"]) > float(row["media"]) else "baja"
+        print(
+            f"[KONCORDE {'OBS ' if observation_only else ''}{interval}] "
+            f"Sin cambio: vela cerrada ya evaluada; posición={pos_now}; "
+            f"verde={float(row['verde']):.2f}; media={float(row['media']):.2f}; "
+            f"cierre={float(row['close']):.2f}."
+        )
         return
     if key_candle not in state:
         # Primera ejecución: establecer línea base sin emitir un cruce antiguo.
@@ -1284,6 +1308,15 @@ def _process_ml_rsi(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFram
 
     key_live = f"ml_rsi_live_signal_{interval}"
     previous = state.get(key_live)
+    candle_state = "ABIERTA/PROVISIONAL" if is_provisional else "CERRADA/CONFIRMADA"
+    print(
+        f"[ML RSI {interval}] Estado actual={str(signal).upper()} "
+        f"({candle_state}); RSI={_safe_float(row.get('ml_rsi')):.1f}; "
+        f"umbral_verde={_safe_float(row.get('ml_long_s')):.1f}; "
+        f"umbral_rojo={_safe_float(row.get('ml_short_s')):.1f}; "
+        f"precio={_safe_float(row.get('close')):.2f}; "
+        f"estado_previo={previous if previous is not None else 'SIN LÍNEA BASE'}."
+    )
     if previous is None:
         state[key_live] = signal
         print(f"[ML RSI {interval}] Estado inicial: {signal}; sin alerta.")
@@ -1388,6 +1421,12 @@ def main():
                 "live": live,
                 "ml": df_ml,
             }
+            print(
+                f"[DATOS {interval}] OK: {len(closed)} velas cerradas; "
+                f"{len(live)} vela(s) en curso; "
+                f"último cierre={float(df_closed.iloc[-1]['close']):.2f}; "
+                f"timestamp={_candle_id(df_closed.iloc[-1])}."
+            )
             if interval == "1h" and not live.empty:
                 current_price = float(live.iloc[-1]["close"])
         except Exception as exc:
@@ -1433,6 +1472,8 @@ def main():
         _track_outcomes(state, current_price, now_ms)
 
     save_state(state)
+    cycle_finished = pd.Timestamp.now(tz="UTC").isoformat()
+    print(f"========== FIN DE CICLO {cycle_finished} ==========", flush=True)
 
 
 if __name__ == "__main__":
