@@ -24,22 +24,22 @@
   "last_mlrsi_1h": "gris",
   "last_mlrsi_4h": "gris",
   "last_mlrsi_1d": "gris",
-  "bitman_last_candle_1h": "1793908799999",
+  "bitman_last_candle_1h": "1793912399999",
   "bitman_last_signal_1h": "VENDER",
   "bitman_last_candle_4h": "1793908799999",
   "bitman_last_signal_4h": "ESPERAR",
   "bitman_last_candle_1d": "1793836799999",
   "bitman_last_signal_1d": "ESPERAR",
-  "koncorde_last_candle_1h": "1793908799999",
+  "koncorde_last_candle_1h": "1793912399999",
   "koncorde_last_position_1h": "baja",
   "koncorde_last_candle_4h": "1793908799999",
   "koncorde_last_position_4h": "baja",
   "koncorde_last_candle_1d": "1793836799999",
   "koncorde_last_position_1d": "baja",
-  "koncorde_last_candle_15m": "1793911499999",
+  "koncorde_last_candle_15m": "1793912399999",
   "koncorde_last_position_15m": "alza",
   "ml_rsi_live_signal_1h": "rojo",
-  "ml_rsi_last_closed_candle_1h": "1793908799999",
+  "ml_rsi_last_closed_candle_1h": "1793912399999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -89,7 +89,9 @@
     "59f69602f9d31ed612d2cb43",
     "612211c5cf0df39ec8a793a7",
     "256edf01adf107b337699ca0",
-    "a271fe1a7bb30f4b78acda65"
+    "a271fe1a7bb30f4b78acda65",
+    "f9527dae5fde25f841e987a9",
+    "a7b7cb952433dd7c467fdc2a"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -185,7 +187,7 @@
       }
     }
   },
-  "koncorde_provisional_candle_1h": "1793912399999",
+  "koncorde_provisional_candle_1h": "1793915999999",
   "koncorde_provisional_position_1h": "baja",
   "koncorde_provisional_events_1h": [],
   "koncorde_provisional_candle_4h": "1793923199999",
@@ -194,7 +196,7 @@
   "koncorde_provisional_candle_1d": "1793923199999",
   "koncorde_provisional_position_1d": "baja",
   "koncorde_provisional_events_1d": [],
-  "bitman_provisional_candle_1h": "1793912399999",
-  "bitman_provisional_signal_1h": "VENDER",
+  "bitman_provisional_candle_1h": "1793915999999",
+  "bitman_provisional_signal_1h": "ESPERAR",
   "bitman_provisional_sent_1h": []
 }
