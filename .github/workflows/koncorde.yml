@@ -46,7 +46,7 @@ jobs:
             # Mantener la copia local sincronizada antes de procesar.
             git pull --rebase origin "$GITHUB_REF_NAME"
 
-            python koncorde_alert.py || echo "::error::Falló una ejecución de koncorde_alert.py"
+            python -u koncorde_alert.py || echo "::error::Falló una ejecución de koncorde_alert.py"
             test -f state.json || printf '{}\n' > state.json
             touch signals_history.jsonl
             git add state.json signals_history.jsonl
