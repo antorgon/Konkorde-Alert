@@ -24,22 +24,22 @@
   "last_mlrsi_1h": "gris",
   "last_mlrsi_4h": "gris",
   "last_mlrsi_1d": "gris",
-  "bitman_last_candle_1h": "1793843999999",
-  "bitman_last_signal_1h": "ESPERAR",
+  "bitman_last_candle_1h": "1793847599999",
+  "bitman_last_signal_1h": "COMPRAR",
   "bitman_last_candle_4h": "1793836799999",
   "bitman_last_signal_4h": "COMPRAR",
   "bitman_last_candle_1d": "1793836799999",
   "bitman_last_signal_1d": "ESPERAR",
-  "koncorde_last_candle_1h": "1793843999999",
+  "koncorde_last_candle_1h": "1793847599999",
   "koncorde_last_position_1h": "alza",
   "koncorde_last_candle_4h": "1793836799999",
   "koncorde_last_position_4h": "alza",
   "koncorde_last_candle_1d": "1793836799999",
   "koncorde_last_position_1d": "baja",
-  "koncorde_last_candle_15m": "1793846699999",
+  "koncorde_last_candle_15m": "1793847599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "gris",
-  "ml_rsi_last_closed_candle_1h": "1793843999999",
+  "ml_rsi_last_closed_candle_1h": "1793847599999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -57,7 +57,9 @@
     "637d38c9aa6d25bdf60555fd",
     "8682af9121ecf3b7a38537cb",
     "02f9c0d1e736177f1fa6ee86",
-    "722b1fcb153951454d6848fa"
+    "722b1fcb153951454d6848fa",
+    "151b32b40ab33c8675ab30e7",
+    "fcdf81d7730fd138705ecae0"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -86,6 +88,15 @@
           "return_pct": 0.852673
         }
       }
+    },
+    "151b32b40ab33c8675ab30e7": {
+      "system": "bitman",
+      "interval": "1h",
+      "signal": "COMPRAR",
+      "direction": "bullish",
+      "event_time_ms": 1793847599999,
+      "price": 80565.79,
+      "outcomes": {}
     }
   }
 }
