@@ -36,7 +36,7 @@
   "koncorde_last_position_4h": "baja",
   "koncorde_last_candle_1d": "1793923199999",
   "koncorde_last_position_1d": "baja",
-  "koncorde_last_candle_15m": "1793941199999",
+  "koncorde_last_candle_15m": "1793942099999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "rojo",
   "ml_rsi_last_closed_candle_1h": "1793941199999",
@@ -219,6 +219,11 @@
           "observed_time_ms": 1793931374029,
           "observed_price": 76064.0,
           "return_pct": 0.827147
+        },
+        "6h": {
+          "observed_time_ms": 1793942305341,
+          "observed_price": 75742.0,
+          "return_pct": 0.400318
         }
       }
     }
