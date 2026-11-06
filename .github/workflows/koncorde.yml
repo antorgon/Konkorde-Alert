@@ -9,6 +9,8 @@ permissions:
   contents: write
   actions: write
 
+# Grupo estable compartido por todas las ejecuciones de este workflow:
+# impide dos ciclos activos simultáneos sobre state.json e histórico.
 concurrency:
   group: koncorde-loop
   cancel-in-progress: false
