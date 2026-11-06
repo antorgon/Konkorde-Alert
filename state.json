@@ -171,36 +171,6 @@
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
   "tracked_events": {
-    "f78735e8116d3cd184943fa9": {
-      "system": "bitman",
-      "interval": "1h",
-      "signal": "VENDER",
-      "direction": "bearish",
-      "event_time_ms": 1793920461335,
-      "price": 75440.0,
-      "outcomes": {
-        "1h": {
-          "observed_time_ms": 1793924097736,
-          "observed_price": 76132.01,
-          "return_pct": 0.917299
-        },
-        "3h": {
-          "observed_time_ms": 1793931374029,
-          "observed_price": 76064.0,
-          "return_pct": 0.827147
-        },
-        "6h": {
-          "observed_time_ms": 1793942305341,
-          "observed_price": 75742.0,
-          "return_pct": 0.400318
-        },
-        "12h": {
-          "observed_time_ms": 1793963836771,
-          "observed_price": 76034.01,
-          "return_pct": 0.787394
-        }
-      }
-    },
     "17059d117a4dd6d8d8dbdacb": {
       "system": "koncorde",
       "interval": "1h",
