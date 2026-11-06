@@ -24,22 +24,22 @@
   "last_mlrsi_1h": "gris",
   "last_mlrsi_4h": "gris",
   "last_mlrsi_1d": "gris",
-  "bitman_last_candle_1h": "1793973599999",
+  "bitman_last_candle_1h": "1793977199999",
   "bitman_last_signal_1h": "ESPERAR",
   "bitman_last_candle_4h": "1793966399999",
   "bitman_last_signal_4h": "ESPERAR",
   "bitman_last_candle_1d": "1793923199999",
   "bitman_last_signal_1d": "ESPERAR",
-  "koncorde_last_candle_1h": "1793973599999",
-  "koncorde_last_position_1h": "alza",
+  "koncorde_last_candle_1h": "1793977199999",
+  "koncorde_last_position_1h": "baja",
   "koncorde_last_candle_4h": "1793966399999",
   "koncorde_last_position_4h": "baja",
   "koncorde_last_candle_1d": "1793923199999",
   "koncorde_last_position_1d": "baja",
-  "koncorde_last_candle_15m": "1793976299999",
+  "koncorde_last_candle_15m": "1793977199999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "rojo",
-  "ml_rsi_last_closed_candle_1h": "1793973599999",
+  "ml_rsi_last_closed_candle_1h": "1793977199999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -132,7 +132,13 @@
     "112be858f3a46db01db6ea02",
     "8a0a1447dddbe79a52ffc5ac",
     "7583838d6f8567783058b35b",
-    "de4e7e736eed90c57a388aef"
+    "de4e7e736eed90c57a388aef",
+    "f03d424caa8609af5f6d28b2",
+    "0b8500bd344deca824d1ace0",
+    "a5b9d7c1ff4d17ea6c134c85",
+    "17059d117a4dd6d8d8dbdacb",
+    "4b886f72285f73b828a438f8",
+    "86a9cce794f1b4d32696920c"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -256,46 +262,27 @@
           "return_pct": 0.787394
         }
       }
+    },
+    "17059d117a4dd6d8d8dbdacb": {
+      "system": "koncorde",
+      "interval": "1h",
+      "signal": "bajista",
+      "direction": "bearish",
+      "event_time_ms": 1793977199999,
+      "price": 75543.49,
+      "outcomes": {}
     }
   },
-  "koncorde_provisional_candle_1h": "1793977199999",
+  "koncorde_provisional_candle_1h": "1793980799999",
   "koncorde_provisional_position_1h": "baja",
-  "koncorde_provisional_events_1h": [
-    {
-      "event_id": "8a0a1447dddbe79a52ffc5ac",
-      "position": "baja",
-      "direction": "bajista",
-      "event_time_ms": 1793975642570,
-      "candle_time_ms": 1793973600000,
-      "price": 75451.8,
-      "telegram_sent": true
-    },
-    {
-      "event_id": "7583838d6f8567783058b35b",
-      "position": "alza",
-      "direction": "alcista",
-      "event_time_ms": 1793976551191,
-      "candle_time_ms": 1793973600000,
-      "price": 75904.01,
-      "telegram_sent": true
-    },
-    {
-      "event_id": "de4e7e736eed90c57a388aef",
-      "position": "baja",
-      "direction": "bajista",
-      "event_time_ms": 1793977157426,
-      "candle_time_ms": 1793973600000,
-      "price": 75481.56,
-      "telegram_sent": true
-    }
-  ],
+  "koncorde_provisional_events_1h": [],
   "koncorde_provisional_candle_4h": "1793980799999",
   "koncorde_provisional_position_4h": "baja",
   "koncorde_provisional_events_4h": [],
   "koncorde_provisional_candle_1d": "1794009599999",
   "koncorde_provisional_position_1d": "baja",
   "koncorde_provisional_events_1d": [],
-  "bitman_provisional_candle_1h": "1793977199999",
+  "bitman_provisional_candle_1h": "1793980799999",
   "bitman_provisional_signal_1h": "ESPERAR",
   "bitman_provisional_sent_1h": [],
   "koncorde_resolved_provisional_events": {
@@ -306,6 +293,30 @@
       "close_time_ms": 1793955599999,
       "telegram_sent": true,
       "telegram_sent_at_ms": 1793955645256
+    },
+    "8a0a1447dddbe79a52ffc5ac": {
+      "resolution_event_id": "f03d424caa8609af5f6d28b2",
+      "status": "sent",
+      "resolution": "invalidated",
+      "close_time_ms": 1793977199999,
+      "telegram_sent": true,
+      "telegram_sent_at_ms": 1793977462162
+    },
+    "7583838d6f8567783058b35b": {
+      "resolution_event_id": "0b8500bd344deca824d1ace0",
+      "status": "sent",
+      "resolution": "invalidated",
+      "close_time_ms": 1793977199999,
+      "telegram_sent": true,
+      "telegram_sent_at_ms": 1793977462365
+    },
+    "de4e7e736eed90c57a388aef": {
+      "resolution_event_id": "a5b9d7c1ff4d17ea6c134c85",
+      "status": "sent",
+      "resolution": "confirmed",
+      "close_time_ms": 1793977199999,
+      "telegram_sent": true,
+      "telegram_sent_at_ms": 1793977462552
     }
   }
 }
