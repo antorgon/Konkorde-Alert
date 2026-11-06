@@ -182,3 +182,39 @@ El workflow sincroniza la rama antes de cada ciclo y, cuando hay cambios en `sta
 Al terminar el bucle, el workflow solicita una nueva ejecución mediante la API de GitHub Actions. La respuesta HTTP se comprueba explícitamente: `204` indica que GitHub aceptó el `workflow_dispatch`. Otros códigos muestran el cuerpo de error para facilitar el diagnóstico. El relanzamiento requiere que el workflow se llame exactamente `koncorde.yml` y que `GITHUB_TOKEN` tenga permiso `actions: write`.
 
 El grupo de concurrencia `koncorde-loop` evita que dos ejecuciones de este bucle trabajen simultáneamente. Una nueva ejecución solicitada mientras otra sigue activa puede quedar pendiente hasta que termine la actual.
+
+
+## 13. Detección intravela y trazabilidad de Koncorde
+
+En H1, H4 y D1, el script evalúa la vela en curso en cada ejecución del ciclo (aproximadamente cada cinco minutos). Cuando detecta un cambio de posición de la línea verde respecto a la media amarilla, registra y envía una alerta `PROVISIONAL` con el detalle de los tres filtros, incluso si el resultado es 0/3 o 1/3.
+
+Al cierre de esa misma vela se envía una resolución asociada al identificador del evento provisional:
+
+- `CONFIRMADA`: el último cruce observado se mantiene y cumple al menos 2/3 filtros.
+- `NO CONFIRMADA`: se mantiene, pero cumple menos de 2/3.
+- `INVALIDADA`: el cruce no se mantiene, o fue reemplazado por un cruce posterior dentro de la misma vela.
+
+Si se producen varios cruces durante una vela, cada provisional conserva su propio identificador y recibe su propia resolución. Solo el último cruce observado puede quedar confirmado al cierre; los anteriores se marcan como invalidados.
+
+### Marcas temporales del histórico
+
+Los nuevos registros incluyen:
+
+- `candle_time_ms`: apertura de la vela en milisegundos UTC.
+- `event_time_ms`: tiempo principal del evento (detección para provisionales; cierre de vela para eventos de cierre).
+- `detected_at_ms`: instante real en que el bot detectó/procesó el evento.
+- `telegram_sent_at_ms`: instante en que terminó correctamente el envío a Telegram; queda vacío si no se envió.
+
+También se guardan las versiones legibles en UTC (`detected_at_utc` y `telegram_sent_at_utc`). Las entradas antiguas del histórico no se reescriben y, por tanto, no tendrán necesariamente estos campos.
+
+La detección depende de la frecuencia del workflow: se evalúa aproximadamente cada cinco minutos, no tick a tick. Un cruce que aparezca y se revierta entre dos ejecuciones puede no llegar a observarse.
+
+
+
+### Protección frente a resoluciones duplicadas
+
+Cada resolución intravela usa un identificador determinista derivado del evento provisional y de la vela de cierre. Antes de enviar Telegram, el script comprueba tanto el histórico de IDs como el mapa persistente `koncorde_resolved_provisional_events` de `state.json`. Una resolución ya registrada no vuelve a enviarse aunque se reprocesara la misma vela.
+
+El workflow conserva un grupo de concurrencia estable (`koncorde-loop`) con `cancel-in-progress: false`, de modo que no se ejecuten dos instancias activas de este ciclo a la vez. Esta protección depende de que todas las ejecuciones del bot usen el mismo workflow y el mismo grupo.
+
+**Límite técnico:** Telegram no ofrece una clave de idempotencia para `sendMessage`. Por ello, ningún bot puede garantizar simultáneamente cero duplicados y cero pérdidas ante una caída exactamente entre el envío a Telegram y el guardado/commit de `state.json`. La protección implementada evita duplicados en reprocesamientos normales y dentro de una ejecución; el estado se guarda en el siguiente commit del ciclo.
