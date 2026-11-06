@@ -218,7 +218,13 @@
       "direction": "bearish",
       "event_time_ms": 1793920461335,
       "price": 75440.0,
-      "outcomes": {}
+      "outcomes": {
+        "1h": {
+          "observed_time_ms": 1793924097736,
+          "observed_price": 76132.01,
+          "return_pct": 0.917299
+        }
+      }
     }
   },
   "koncorde_provisional_candle_1h": "1793926799999",
