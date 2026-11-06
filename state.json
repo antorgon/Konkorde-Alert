@@ -115,7 +115,8 @@
     "3efec01f09c459c66dfc9d24",
     "554c5c934a05dbb8a61c3a15",
     "82032069f09c20193310e94c",
-    "7f74349a0309154639503fe8"
+    "7f74349a0309154639503fe8",
+    "690879ca83116b2a797d6309"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -237,7 +238,7 @@
     }
   },
   "koncorde_provisional_candle_1h": "1793951999999",
-  "koncorde_provisional_position_1h": "alza",
+  "koncorde_provisional_position_1h": "baja",
   "koncorde_provisional_events_1h": [
     {
       "event_id": "6f80db6106f1773681f6a287",
@@ -259,6 +260,13 @@
       "direction": "alcista",
       "event_time_ms": 1793951090514,
       "price": 75704.18
+    },
+    {
+      "event_id": "690879ca83116b2a797d6309",
+      "position": "baja",
+      "direction": "bajista",
+      "event_time_ms": 1793951698458,
+      "price": 75684.74
     }
   ],
   "koncorde_provisional_candle_4h": "1793951999999",
