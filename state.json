@@ -24,22 +24,22 @@
   "last_mlrsi_1h": "gris",
   "last_mlrsi_4h": "gris",
   "last_mlrsi_1d": "gris",
-  "bitman_last_candle_1h": "1794063599999",
+  "bitman_last_candle_1h": "1794067199999",
   "bitman_last_signal_1h": "ESPERAR",
-  "bitman_last_candle_4h": "1794052799999",
+  "bitman_last_candle_4h": "1794067199999",
   "bitman_last_signal_4h": "ESPERAR",
   "bitman_last_candle_1d": "1794009599999",
   "bitman_last_signal_1d": "ESPERAR",
-  "koncorde_last_candle_1h": "1794063599999",
+  "koncorde_last_candle_1h": "1794067199999",
   "koncorde_last_position_1h": "baja",
-  "koncorde_last_candle_4h": "1794052799999",
+  "koncorde_last_candle_4h": "1794067199999",
   "koncorde_last_position_4h": "baja",
   "koncorde_last_candle_1d": "1794009599999",
   "koncorde_last_position_1d": "baja",
-  "koncorde_last_candle_15m": "1794066299999",
+  "koncorde_last_candle_15m": "1794067199999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "gris",
-  "ml_rsi_last_closed_candle_1h": "1794063599999",
+  "ml_rsi_last_closed_candle_1h": "1794067199999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -199,7 +199,8 @@
     "8c7db47ea77d6937b75fcb0e",
     "b121e9e7124e0b7effc55c43",
     "65066830d265bc1a69a52c5f",
-    "c0673ced9dc4803be0661ab3"
+    "c0673ced9dc4803be0661ab3",
+    "be6f0e0f79ab25f8b677b980"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -216,20 +217,25 @@
           "observed_time_ms": 1794060167593,
           "observed_price": 75943.56,
           "return_pct": 0.057826
+        },
+        "3h": {
+          "observed_time_ms": 1794067453247,
+          "observed_price": 75777.26,
+          "return_pct": -0.161279
         }
       }
     }
   },
-  "koncorde_provisional_candle_1h": "1794067199999",
+  "koncorde_provisional_candle_1h": "1794070799999",
   "koncorde_provisional_position_1h": "baja",
   "koncorde_provisional_events_1h": [],
-  "koncorde_provisional_candle_4h": "1794067199999",
+  "koncorde_provisional_candle_4h": "1794081599999",
   "koncorde_provisional_position_4h": "baja",
   "koncorde_provisional_events_4h": [],
   "koncorde_provisional_candle_1d": "1794095999999",
   "koncorde_provisional_position_1d": "baja",
   "koncorde_provisional_events_1d": [],
-  "bitman_provisional_candle_1h": "1794067199999",
+  "bitman_provisional_candle_1h": "1794070799999",
   "bitman_provisional_signal_1h": "ESPERAR",
   "bitman_provisional_sent_1h": [],
   "koncorde_resolved_provisional_events": {
