@@ -345,7 +345,13 @@
       "direction": "bearish",
       "event_time_ms": 1794174745270,
       "price": 75242.45,
-      "outcomes": {}
+      "outcomes": {
+        "1h": {
+          "observed_time_ms": 1794178377531,
+          "observed_price": 74454.01,
+          "return_pct": -1.047866
+        }
+      }
     },
     "a3068af5b3e2a3b150d5ba96": {
       "system": "bitman",
