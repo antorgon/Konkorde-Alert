@@ -284,7 +284,8 @@
     "a3068af5b3e2a3b150d5ba96",
     "af06879afe4899b150b0fe95",
     "6bb05810dc5e0864c7ec62b5",
-    "b78c016f8f95360a3877efbb"
+    "b78c016f8f95360a3877efbb",
+    "81ae8719daa2f423f4e35192"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -405,7 +406,7 @@
   "koncorde_provisional_position_1d": "baja",
   "koncorde_provisional_events_1d": [],
   "bitman_provisional_candle_1h": "1794182399999",
-  "bitman_provisional_signal_1h": "VENDER",
+  "bitman_provisional_signal_1h": "ESPERAR",
   "bitman_provisional_sent_1h": [],
   "koncorde_resolved_provisional_events": {
     "94e1255e71fa706dfaae694c": {
