@@ -278,7 +278,8 @@
     "7a8bac7bb6340355bea4a94e",
     "c5ecf8b42affa4c8e97db96f",
     "5376ef40aab135732a929273",
-    "02cbbcffb933a39f1d719d3b"
+    "02cbbcffb933a39f1d719d3b",
+    "c029fe33669b0ce35f8a0a99"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -327,6 +328,15 @@
           "return_pct": -0.194193
         }
       }
+    },
+    "c029fe33669b0ce35f8a0a99": {
+      "system": "bitman",
+      "interval": "1h",
+      "signal": "VENDER",
+      "direction": "bearish",
+      "event_time_ms": 1794174745270,
+      "price": 75242.45,
+      "outcomes": {}
     }
   },
   "koncorde_provisional_candle_1h": "1794175199999",
@@ -339,8 +349,10 @@
   "koncorde_provisional_position_1d": "baja",
   "koncorde_provisional_events_1d": [],
   "bitman_provisional_candle_1h": "1794175199999",
-  "bitman_provisional_signal_1h": "ESPERAR",
-  "bitman_provisional_sent_1h": [],
+  "bitman_provisional_signal_1h": "VENDER",
+  "bitman_provisional_sent_1h": [
+    "VENDER"
+  ],
   "koncorde_resolved_provisional_events": {
     "94e1255e71fa706dfaae694c": {
       "resolution_event_id": "05e9dce6a3177efbb733075a",
