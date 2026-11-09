@@ -36,8 +36,8 @@
   "koncorde_last_position_4h": "baja",
   "koncorde_last_candle_1d": "1794182399999",
   "koncorde_last_position_1d": "baja",
-  "koncorde_last_candle_15m": "1794220199999",
-  "koncorde_last_position_15m": "alza",
+  "koncorde_last_candle_15m": "1794221099999",
+  "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "rojo",
   "ml_rsi_last_closed_candle_1h": "1794218399999",
   "history_event_ids": [
@@ -304,7 +304,8 @@
     "b0f831da5bc44a3c1143fffa",
     "f0cc911d8662935bacd26a22",
     "4a0b9a6dc0aff77301c2bd8c",
-    "6d868f3641e465502d5cf441"
+    "6d868f3641e465502d5cf441",
+    "189fe3131751af11b2be135c"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
