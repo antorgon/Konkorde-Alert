@@ -460,7 +460,8 @@
     "79922f55cbbf94424e5635f5",
     "cc7f5ec2af12ec9b0a9fda7f",
     "e54c4cea985d5f4310325723",
-    "8b4dec036de913e1b0d88736"
+    "8b4dec036de913e1b0d88736",
+    "649e592675438c0da0199957"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -775,7 +776,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794268493226,
+  "last_cycle_ms": 1794268796481,
   "bitman_last_closed_1h": "1794265199999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1794268799999",
