@@ -24,22 +24,22 @@
   "last_mlrsi_1h": "gris",
   "last_mlrsi_4h": "gris",
   "last_mlrsi_1d": "gris",
-  "bitman_last_candle_1h": "1794182399999",
+  "bitman_last_candle_1h": "1794185999999",
   "bitman_last_signal_1h": "ESPERAR",
   "bitman_last_candle_4h": "1794182399999",
   "bitman_last_signal_4h": "ESPERAR",
   "bitman_last_candle_1d": "1794182399999",
   "bitman_last_signal_1d": "ESPERAR",
-  "koncorde_last_candle_1h": "1794182399999",
+  "koncorde_last_candle_1h": "1794185999999",
   "koncorde_last_position_1h": "baja",
   "koncorde_last_candle_4h": "1794182399999",
   "koncorde_last_position_4h": "baja",
   "koncorde_last_candle_1d": "1794182399999",
   "koncorde_last_position_1d": "baja",
-  "koncorde_last_candle_15m": "1794185099999",
+  "koncorde_last_candle_15m": "1794185999999",
   "koncorde_last_position_15m": "alza",
   "ml_rsi_live_signal_1h": "rojo",
-  "ml_rsi_last_closed_candle_1h": "1794182399999",
+  "ml_rsi_last_closed_candle_1h": "1794185999999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -291,7 +291,8 @@
     "79fe56fe1fa75e4d50dc5a31",
     "3dae37c273fa4d3958173b62",
     "2a553f84a4f6893958e31405",
-    "9ec749783c2224f3246bdfb0"
+    "9ec749783c2224f3246bdfb0",
+    "17c3a7e2e79c9e3e467aae25"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -378,6 +379,11 @@
           "observed_time_ms": 1794178983066,
           "observed_price": 74732.42,
           "return_pct": 0.804807
+        },
+        "3h": {
+          "observed_time_ms": 1794186263864,
+          "observed_price": 75388.01,
+          "return_pct": 1.689117
         }
       }
     },
@@ -393,6 +399,11 @@
           "observed_time_ms": 1794178983066,
           "observed_price": 74732.42,
           "return_pct": 0.156536
+        },
+        "3h": {
+          "observed_time_ms": 1794186263864,
+          "observed_price": 75388.01,
+          "return_pct": 1.035159
         }
       }
     },
@@ -403,10 +414,16 @@
       "direction": "bearish",
       "event_time_ms": 1794182399999,
       "price": 74851.44,
-      "outcomes": {}
+      "outcomes": {
+        "1h": {
+          "observed_time_ms": 1794186263864,
+          "observed_price": 75388.01,
+          "return_pct": 0.716847
+        }
+      }
     }
   },
-  "koncorde_provisional_candle_1h": "1794185999999",
+  "koncorde_provisional_candle_1h": "1794189599999",
   "koncorde_provisional_position_1h": "baja",
   "koncorde_provisional_events_1h": [],
   "koncorde_provisional_candle_4h": "1794196799999",
@@ -415,7 +432,7 @@
   "koncorde_provisional_candle_1d": "1794268799999",
   "koncorde_provisional_position_1d": "baja",
   "koncorde_provisional_events_1d": [],
-  "bitman_provisional_candle_1h": "1794185999999",
+  "bitman_provisional_candle_1h": "1794189599999",
   "bitman_provisional_signal_1h": "ESPERAR",
   "bitman_provisional_sent_1h": [],
   "koncorde_resolved_provisional_events": {
