@@ -9,8 +9,6 @@ permissions:
   contents: write
   actions: write
 
-# Grupo estable compartido por todas las ejecuciones de este workflow:
-# impide dos ciclos activos simultáneos sobre state.json e histórico.
 concurrency:
   group: koncorde-loop
   cancel-in-progress: false
@@ -35,74 +33,26 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Bucle de chequeos cada 5 min durante ~5h40m
-        shell: bash
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          set -Eeuo pipefail
+          set -e
           git config user.name "koncorde-bot"
           git config user.email "actions@github.com"
 
-          BRANCH="$GITHUB_REF_NAME"
-
-          sync_with_remote() {
-            local attempt
-            for attempt in 1 2 3; do
-              echo "Sincronizando con origin/$BRANCH (intento $attempt/3)"
-              if git fetch origin "$BRANCH" && git rebase "origin/$BRANCH"; then
-                return 0
-              fi
-              git rebase --abort >/dev/null 2>&1 || true
-              if [ "$attempt" -lt 3 ]; then
-                sleep $((attempt * 5))
-              fi
-            done
-            echo "::error::No se pudo sincronizar con origin/$BRANCH"
-            return 1
-          }
-
-          push_with_retry() {
-            local attempt
-            for attempt in 1 2 3; do
-              echo "Enviando estado a GitHub (intento $attempt/3)"
-              if git push origin "HEAD:$BRANCH"; then
-                echo "Estado e histórico guardados en GitHub"
-                return 0
-              fi
-
-              if [ "$attempt" -lt 3 ]; then
-                echo "Push rechazado; se actualizará la rama antes de reintentar"
-                if ! sync_with_remote; then
-                  return 1
-                fi
-                sleep $((attempt * 10))
-              fi
-            done
-            echo "::error::No se pudo guardar el estado después de 3 intentos"
-            return 1
-          }
-
           END=$((SECONDS + 20400))
-          while [ "$SECONDS" -lt "$END" ]; do
-            # No procesar con una copia local desactualizada.
-            sync_with_remote
+          while [ $SECONDS -lt $END ]; do
+            # Mantener la copia local sincronizada antes de procesar.
+            git pull --rebase origin "$GITHUB_REF_NAME"
 
-            # Un fallo puntual del análisis queda registrado, pero no impide
-            # intentar guardar cualquier estado/histórico que sí se haya escrito.
-            if ! python -u koncorde_alert.py; then
-              echo "::error::Falló una ejecución de koncorde_alert.py; se continúa con el ciclo"
-            fi
-
+            python koncorde_alert.py || echo "::error::Falló una ejecución de koncorde_alert.py"
             test -f state.json || printf '{}\n' > state.json
             touch signals_history.jsonl
             git add state.json signals_history.jsonl
-
-            if ! git diff --cached --quiet; then
+            if ! git diff --staged --quiet; then
               git commit -m "Update alert state and signal history [skip ci]"
-              push_with_retry
-            else
-              echo "Sin cambios de estado/histórico que guardar"
+              git push origin "HEAD:$GITHUB_REF_NAME"
             fi
 
             sleep 300
@@ -110,38 +60,13 @@ jobs:
 
       - name: Relanzar el siguiente ciclo
         if: always()
-        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -Eeuo pipefail
-
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::GITHUB_TOKEN está vacío; no se puede relanzar el workflow"
-            exit 1
-          fi
-
-          BODY=$(jq -n --arg ref "$GITHUB_REF_NAME" '{ref: $ref}')
-          HTTP_CODE=$(curl --retry 3 --retry-all-errors --retry-delay 2 \
-            -sS \
-            -o response.json \
-            -w "%{http_code}" \
-            -X POST \
+          curl -sf -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            -H "Content-Type: application/json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/koncorde.yml/dispatches" \
-            -d "$BODY")
-
-          if [ "$HTTP_CODE" = "204" ]; then
-            echo "Siguiente ciclo lanzado correctamente (HTTP 204)"
-          else
-            echo "::error::GitHub rechazó el relanzamiento (HTTP $HTTP_CODE)"
-            if [ -s response.json ]; then
-              cat response.json
-            else
-              echo "La respuesta de GitHub no contiene cuerpo"
-            fi
-            exit 1
-          fi
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/koncorde.yml/dispatches" \
+            -d '{"ref":"${{ github.ref_name }}"}' \
+            && echo "Siguiente ciclo lanzado correctamente" \
+            || echo "::error::No se pudo relanzar el siguiente ciclo"
