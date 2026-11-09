@@ -358,6 +358,11 @@
           "observed_time_ms": 1794178377531,
           "observed_price": 74454.01,
           "return_pct": -1.047866
+        },
+        "3h": {
+          "observed_time_ms": 1794185658463,
+          "observed_price": 75144.01,
+          "return_pct": -0.13083
         }
       }
     },
