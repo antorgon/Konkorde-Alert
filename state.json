@@ -415,41 +415,12 @@
     "480ce1d6e5cdfcdccd3c6754",
     "345efbf03401f928dc56d9db",
     "6c6f3caebb98dde5d8f5acea",
-    "5f36b0c2159a69bfa86ed97d"
+    "5f36b0c2159a69bfa86ed97d",
+    "88f4c89670d61d2791e85f49"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
   "tracked_events": {
-    "c029fe33669b0ce35f8a0a99": {
-      "system": "bitman",
-      "interval": "1h",
-      "signal": "VENDER",
-      "direction": "bearish",
-      "event_time_ms": 1794174745270,
-      "price": 75242.45,
-      "outcomes": {
-        "1h": {
-          "observed_time_ms": 1794178377531,
-          "observed_price": 74454.01,
-          "return_pct": -1.047866
-        },
-        "3h": {
-          "observed_time_ms": 1794185658463,
-          "observed_price": 75144.01,
-          "return_pct": -0.13083
-        },
-        "6h": {
-          "observed_time_ms": 1794196558631,
-          "observed_price": 74882.81,
-          "return_pct": -0.477975
-        },
-        "12h": {
-          "observed_time_ms": 1794218081284,
-          "observed_price": 74334.01,
-          "return_pct": -1.20735
-        }
-      }
-    },
     "a3068af5b3e2a3b150d5ba96": {
       "system": "bitman",
       "interval": "1h",
@@ -820,7 +791,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794260888820,
+  "last_cycle_ms": 1794261192607,
   "bitman_last_closed_1h": "1794257999999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1794261599999",
