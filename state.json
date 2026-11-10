@@ -39,7 +39,7 @@
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "gris",
-  "ml_rsi_last_closed_candle_1h": "1794311999999",
+  "ml_rsi_last_closed_candle_1h": "1794315599999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -727,7 +727,12 @@
     "715edcc5a5158c3af00165c3",
     "15fbbbc6185495548bc68812",
     "7f43a427760dcf9f8ce2f347",
-    "357c03c3c63e87644f57ae7f"
+    "357c03c3c63e87644f57ae7f",
+    "6b9173fcaccf7510d5d27314",
+    "f2bfc210c1167166ff366bb4",
+    "5910c99693258d007b8c1093",
+    "3f836b577f89d9e8847852ac",
+    "c6c812cb53c5f83a121af1d1"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -987,23 +992,23 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794315577597,
-  "bitman_last_closed_1h": "1794311999999",
+  "last_cycle_ms": 1794315881031,
+  "bitman_last_closed_1h": "1794315599999",
   "bitman_live_signal_1h": "ESPERAR",
-  "bitman_live_candle_1h": "1794315599999",
+  "bitman_live_candle_1h": "1794319199999",
   "bitman_last_closed_4h": "1794311999999",
   "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1794326399999",
   "bitman_last_closed_1d": "1794268799999",
   "bitman_live_signal_1d": "ESPERAR",
   "bitman_live_candle_1d": "1794355199999",
-  "koncorde_last_closed_1h": "1794311999999",
+  "koncorde_last_closed_1h": "1794315599999",
   "koncorde_live_position_1h": "baja",
   "koncorde_last_closed_4h": "1794311999999",
   "koncorde_live_position_4h": "baja",
   "koncorde_last_closed_1d": "1794268799999",
   "koncorde_live_position_1d": "baja",
-  "koncorde_last_closed_15m": "1794314699999",
-  "koncorde_live_position_15m": "baja",
+  "koncorde_last_closed_15m": "1794315599999",
+  "koncorde_live_position_15m": "alza",
   "daily_summary_sent": "2026-11-09"
 }
