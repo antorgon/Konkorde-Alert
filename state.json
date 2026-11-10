@@ -603,41 +603,12 @@
     "3bf3463f43c1c0ce7d19612c",
     "ee1d8ca6928b1371facc80b6",
     "fe8d59999ee6110458b66cd3",
-    "3dd2b55ec61111334011b84f"
+    "3dd2b55ec61111334011b84f",
+    "26224d25dd6c21a38b0a486c"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
   "tracked_events": {
-    "8ef577cfb319d100738d2709": {
-      "system": "ml_rsi",
-      "interval": "1h",
-      "signal": "rojo",
-      "direction": "bearish",
-      "event_time_ms": 1794206571238,
-      "price": 74145.61,
-      "outcomes": {
-        "1h": {
-          "observed_time_ms": 1794210205272,
-          "observed_price": 74062.01,
-          "return_pct": -0.112751
-        },
-        "3h": {
-          "observed_time_ms": 1794217474276,
-          "observed_price": 74237.05,
-          "return_pct": 0.123325
-        },
-        "6h": {
-          "observed_time_ms": 1794228405876,
-          "observed_price": 74819.27,
-          "return_pct": 0.908564
-        },
-        "12h": {
-          "observed_time_ms": 1794249961544,
-          "observed_price": 74616.85,
-          "return_pct": 0.63556
-        }
-      }
-    },
     "16a36a7c7af47042df846539": {
       "system": "ml_rsi",
       "interval": "1h",
@@ -893,7 +864,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794292789141,
+  "last_cycle_ms": 1794293092439,
   "bitman_last_closed_1h": "1794290399999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1794293999999",
