@@ -38,8 +38,8 @@
   "koncorde_last_position_1d": "baja",
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
-  "ml_rsi_live_signal_1h": "gris",
-  "ml_rsi_last_closed_candle_1h": "1794315599999",
+  "ml_rsi_live_signal_1h": "rojo",
+  "ml_rsi_last_closed_candle_1h": "1794319199999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -747,7 +747,15 @@
     "7d42b3044df5dac417e6a74a",
     "5c6eb463a53e671f8845fe97",
     "9a44bd95114accd9f242f5fd",
-    "39005d7f85ca24d29b9dfffd"
+    "39005d7f85ca24d29b9dfffd",
+    "4df57267f0a743aa3510ee76",
+    "006b1fb7a591d2991140af63",
+    "5ff6a2a7e60e1865c3b6bef8",
+    "df1d643b9ce5864910320c09",
+    "1c1a81169c363313165cc387",
+    "638ace3bfbc5f573bd246141",
+    "8b0b1b23bba372191133fcdf",
+    "c244922e7e192cb5f4878cf2"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -976,32 +984,31 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794318918195,
-  "bitman_last_closed_1h": "1794315599999",
+  "last_cycle_ms": 1794319221709,
+  "bitman_last_closed_1h": "1794319199999",
   "bitman_live_signal_1h": "VENDER",
-  "bitman_live_candle_1h": "1794319199999",
+  "bitman_live_candle_1h": "1794322799999",
   "bitman_last_closed_4h": "1794311999999",
   "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1794326399999",
   "bitman_last_closed_1d": "1794268799999",
   "bitman_live_signal_1d": "ESPERAR",
   "bitman_live_candle_1d": "1794355199999",
-  "koncorde_last_closed_1h": "1794315599999",
+  "koncorde_last_closed_1h": "1794319199999",
   "koncorde_live_position_1h": "baja",
   "koncorde_last_closed_4h": "1794311999999",
   "koncorde_live_position_4h": "baja",
   "koncorde_last_closed_1d": "1794268799999",
   "koncorde_live_position_1d": "baja",
-  "koncorde_last_closed_15m": "1794318299999",
+  "koncorde_last_closed_15m": "1794319199999",
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-09",
-  "pending_bitman_1h": {
-    "candle": "1794319199999",
+  "pending_ml_rsi_1h": {
+    "candle": "1794322799999",
     "candidate": {
-      "signal": "VENDER",
-      "event_id": "7fcc702a28ad394f0b77cc7f",
-      "detected_ms": 1794317704900
-    },
-    "final_filter_count": 3
+      "signal": "rojo",
+      "event_id": "8b0b1b23bba372191133fcdf",
+      "detected_ms": 1794319223837
+    }
   }
 }
