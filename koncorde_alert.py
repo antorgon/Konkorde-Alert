@@ -676,8 +676,8 @@ VALOR_MAX_BAJA = -25  # sin limite inferior
 ICONO_VALOR = {"dentro": "🟢", "extendido": "🟡", "contrario": "🔴"}
 TEXTO_VALOR = {
     "dentro": "dentro del rango validado",
-    "extendido": "fuera de rango, en pleno proceso (sin ventaja estadistica demostrada)",
-    "contrario": "direccion contraria al cruce",
+    "extendido": "fuera del rango validado (sin ventaja estadística demostrada)",
+    "contrario": "signo contrario a la dirección del cruce",
 }
 
 
@@ -1139,15 +1139,20 @@ def _resolve_pending(system: str, interval: str, row, state: dict,
         return
     candidate = pending.get("candidate")
     if candidate:
-        if candidate.get("invalidated") or not valid or final_signal != candidate.get("signal"):
+        if candidate.get("invalidated") or (valid and final_signal != candidate.get("signal")):
             outcome = "INVALIDADA"
-            detail = f"La señal provisional {candidate.get('signal')} fue invalidada o no se mantuvo al cierre."
+            detail = (f"El cruce provisional {candidate.get('signal')} desapareció o terminó "
+                      "con la dirección contraria al cierre.")
+        elif not valid:
+            outcome = "NO VERIFICABLE"
+            detail = ("No se pudo recuperar la vela exacta del candidato; "
+                      "no es posible determinar si se mantuvo al cierre.")
         elif int(final_filter_count) < 2:
             outcome = "NO CONFIRMADA"
-            detail = "El candidato se mantuvo, pero terminó con menos de 2/3 filtros."
+            detail = "El cruce se mantuvo, pero terminó con menos de 2/3 filtros válidos."
         else:
             outcome = "CONFIRMADA"
-            detail = "El último candidato válido se mantuvo al cierre."
+            detail = "El último candidato válido se mantuvo al cierre y conservó al menos 2/3 filtros."
         event_ms = int(pd.Timestamp(row["close_time"]).timestamp() * 1000)
         eid = candidate.get("event_id", "")
         block = (
@@ -1377,8 +1382,11 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
             pass
         else:
             value_text = f"{c['verde_val']:.1f} {ICONO_VALOR[c['valor_estado']]} ({TEXTO_VALOR[c['valor_estado']]})"
+            rango_text = c["rango_valor_txt"]
             indicators = {
                 "Valor verde": value_text,
+                "Rango de referencia del valor verde": rango_text,
+                "Valor verde (dato capturado)": _safe_float(row["verde"]),
                 "Trend Speed Analyzer": f"{'alcista' if c['tsa_bullish'] else 'bajista'} {'✅' if c['tsa_ok'] else '❌'}",
                 "ADX": f"{c['adx_val']:.1f} {'✅' if c['adx_ok'] else '❌'} (DI+ {float(row['di_plus']):.1f} / DI- {float(row['di_minus']):.1f})",
                 "Filtros": f"{n_ok}/3",
@@ -1557,63 +1565,122 @@ def _clear_data_error(state: dict, interval: str):
         })
 
 
-def _send_daily_summary(state: dict, now_ms: int):
-    """Resumen del día natural anterior en Europe/Madrid; una vez al día."""
-    now = datetime.fromtimestamp(now_ms / 1000, tz=timezone.utc).astimezone(ZoneInfo("Europe/Madrid"))
+def _estado_intervalo(interval: str, market: dict, state: dict) -> tuple[str, str]:
+    """Devuelve estado operativo actual y marca temporal de la última lectura válida."""
+    item = market.get(interval)
+    last_ok = state.get(f"last_data_ok_{interval}")
+    updated = (
+        datetime.fromtimestamp(int(last_ok) / 1000, tz=timezone.utc)
+        .astimezone(ZoneInfo("Europe/Madrid")).strftime("%H:%M:%S")
+        if last_ok else "sin registro"
+    )
+    error = state.get(f"data_error_{interval}")
+    if item is None:
+        if error:
+            return f"⚠️ SIN DATOS VÁLIDOS · {str(error.get('message', 'error'))[:100]}", updated
+        return "⚠️ SIN DATOS EN ESTE CICLO", updated
+    return "", updated
+
+
+def _send_daily_summary(state: dict, now_ms: int, market: dict):
+    """Envía a las 08:00 una fotografía de los estados actuales, no un recuento del día anterior."""
+    madrid = ZoneInfo("Europe/Madrid")
+    now = datetime.fromtimestamp(now_ms / 1000, tz=timezone.utc).astimezone(madrid)
     if now.hour < 8:
         return
-    yesterday = now.date().fromordinal(now.date().toordinal() - 1)
-    day_key = yesterday.isoformat()
+    day_key = now.date().isoformat()
     if state.get("daily_summary_sent") == day_key:
         return
-    start = datetime.combine(yesterday, datetime.min.time(), tzinfo=ZoneInfo("Europe/Madrid"))
-    end = datetime.combine(now.date(), datetime.min.time(), tzinfo=ZoneInfo("Europe/Madrid"))
-    start_ms = int(start.astimezone(timezone.utc).timestamp() * 1000)
-    end_ms = int(end.astimezone(timezone.utc).timestamp() * 1000)
-    counts = {}
-    errors = 0
-    cycles = 0
-    interruptions = 0
-    path = Path(HISTORY_FILE)
-    if path.exists():
-        with path.open(encoding="utf-8") as f:
-            for line in f:
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                ts = rec.get("event_time_ms")
-                if ts is None or not start_ms <= int(ts) < end_ms:
-                    continue
-                if rec.get("record_type") in ("data_error", "processing_error"):
-                    errors += 1
-                if rec.get("record_type") == "bot_cycle":
-                    cycles += 1
-                if rec.get("record_type") == "interruption":
-                    interruptions += 1
-                if rec.get("kind") == "telegram_sent":
-                    continue
-                system = rec.get("system", "otros")
-                status = rec.get("status", rec.get("kind", "evento"))
-                bucket = counts.setdefault(system, {})
-                bucket[status] = bucket.get(status, 0) + 1
-    lines = [f"<b>RESUMEN DIARIO {SYMBOL}</b>", f"Día: {day_key} (Europe/Madrid)"]
-    for system in ("bitman", "koncorde", "ml_rsi", "koncorde_observation"):
-        bucket = counts.get(system, {})
-        if bucket:
-            lines.append(f"<b>{system.upper()}</b>: " + ", ".join(f"{k}: {v}" for k, v in sorted(bucket.items())))
+
+    lines = [
+        f"<b>ESTADO ACTUAL DE LOS SISTEMAS · {SYMBOL}</b>",
+        f"{now.strftime('%d/%m/%Y · %H:%M:%S')} (hora de Madrid)",
+        "",
+        "<b>BITMAN</b>",
+    ]
+    for interval in BITMAN_INTERVALS:
+        item = market.get(interval)
+        if item is None:
+            status, updated = _estado_intervalo(interval, market, state)
+            lines.append(f"{interval.upper()}: {status} · Último dato válido: {updated}")
+            continue
+        row = item["live"].iloc[-1] if not item["live"].empty else item["closed"].iloc[-1]
+        signal = str(row.get("veredicto", "SIN ESTADO"))
+        icon = "🟢" if signal == "COMPRAR" else "🔴" if signal == "VENDER" else "⚪"
+        pending = state.get(f"pending_bitman_{interval}", {}).get("candidate")
+        suffix = f" · provisional pendiente ({pending.get('signal')})" if pending else ""
+        _, updated = _estado_intervalo(interval, market, state)
+        lines.append(f"{interval.upper()}: {icon} {signal}{suffix} · Dato: {updated}")
+
+    lines.extend(["", "<b>KONCORDE</b>"])
+    for interval in KONCORDE_INTERVALS:
+        item = market.get(interval)
+        if item is None:
+            status, updated = _estado_intervalo(interval, market, state)
+            lines.append(f"{interval.upper()}: {status} · Último dato válido: {updated}")
+            continue
+        row = item["live"].iloc[-1] if not item["live"].empty else item["closed"].iloc[-1]
+        position = "alza" if float(row["verde"]) > float(row["media"]) else "baja"
+        candidate = state.get(f"pending_koncorde_{interval}", {}).get("candidate")
+        if candidate:
+            direction = "alcista" if candidate.get("signal") == "alza" else "bajista"
+            filters = candidate.get("filters", "?")
+            status = f"candidato {direction} · {filters}/3 filtros"
         else:
-            lines.append(f"<b>{system.upper()}</b>: sin eventos registrados")
-    expected_cycles = max(1, int((end_ms - start_ms) / (5 * 60 * 1000)))
-    uptime = min(100.0, cycles / expected_cycles * 100.0)
-    lines.append(f"Ciclos observados: {cycles}/{expected_cycles} · disponibilidad aproximada: {uptime:.1f}%")
-    lines.append(f"Errores: {errors} · interrupciones detectadas: {interruptions}")
+            status = f"sin candidato pendiente · posición actual {position}"
+        _, updated = _estado_intervalo(interval, market, state)
+        lines.append(f"{interval.upper()}: {status} · Dato: {updated}")
+
+    lines.extend(["", "<b>ML RSI</b>"])
+    for interval in ML_RSI_INTERVALS:
+        item = market.get(interval)
+        if item is None or item.get("ml_live") is None or item["ml_live"].empty:
+            status, updated = _estado_intervalo(interval, market, state)
+            lines.append(f"{interval.upper()}: {status} · Último dato válido: {updated}")
+            continue
+        row = item["ml_live"].iloc[-1]
+        signal = str(row.get("ml_señal", "sin clasificación"))
+        icon = "🟢" if signal == "verde" else "🔴" if signal == "rojo" else "⚪"
+        candidate = state.get(f"pending_ml_rsi_{interval}", {}).get("candidate")
+        suffix = f" · provisional pendiente ({candidate.get('signal')})" if candidate else ""
+        _, updated = _estado_intervalo(interval, market, state)
+        lines.append(f"{interval.upper()}: {icon} {signal.upper()}{suffix} · Dato: {updated}")
+
+    lines.extend(["", "<b>KONCORDE M15 · OBSERVACIÓN</b>"])
+    item = market.get("15m")
+    if item is None:
+        status, updated = _estado_intervalo("15m", market, state)
+        lines.append(f"{status} · Último dato válido: {updated}")
+    else:
+        row = item["live"].iloc[-1] if not item["live"].empty else item["closed"].iloc[-1]
+        distance = abs(float(row["verde"]) - float(row["media"]))
+        position = "alza" if float(row["verde"]) > float(row["media"]) else "baja"
+        _, updated = _estado_intervalo("15m", market, state)
+        lines.append(f"Observación activa · Posición {position} · Distancia verde-media: {distance:.2f} · Dato: {updated}")
+    lines.append("Sin avisos operativos de Telegram en esta temporalidad.")
+
+    active_errors = []
+    for interval in sorted(set(BITMAN_INTERVALS + KONCORDE_INTERVALS +
+                               KONCORDE_OBSERVE_INTERVALS + ML_RSI_INTERVALS),
+                           key=lambda x: INTERVAL_MS[x]):
+        error = state.get(f"data_error_{interval}")
+        if error:
+            active_errors.append(f"{interval.upper()}: {error.get('count', 0)} ciclos · {str(error.get('message', 'error'))[:100]}")
+    lines.extend(["", "<b>FUNCIONAMIENTO</b>"])
+    lines.append(f"Último ciclo del bot: {now.strftime('%H:%M:%S')} (Madrid)")
+    if active_errors:
+        lines.append("⚠️ Problemas activos: " + " | ".join(active_errors))
+    else:
+        lines.append("✅ Sin errores de datos activos en este ciclo.")
+
     send_telegram("\n".join(lines))
     state["daily_summary_sent"] = day_key
-    _append_history({"record_type": "daily_summary_sent", "event_time_ms": now_ms,
-                     "day": day_key, "counts": counts, "data_errors": errors,
-                     "cycles": cycles, "uptime_pct": round(uptime, 2),
-                     "interruptions": interruptions})
+    _append_history({
+        "record_type": "daily_status_snapshot_sent", "event_time_ms": now_ms,
+        "day": day_key,
+        "snapshot": {"market_intervals": sorted(market.keys()),
+                     "active_data_errors": active_errors},
+    })
 
 
 def main():
@@ -1669,6 +1736,7 @@ def main():
             market[interval] = {"closed": df_closed, "live": df_live,
                                 "ml_closed": df_ml_closed, "ml_live": df_ml_live,
                                 "has_live": not live_raw.empty}
+            state[f"last_data_ok_{interval}"] = now_ms
             _clear_data_error(state, interval)
             if interval == "1h":
                 current_price = float((live_raw if not live_raw.empty else closed_raw).iloc[-1]["close"])
@@ -1716,7 +1784,7 @@ def main():
 
     if current_price is not None:
         _track_outcomes(state, current_price, now_ms)
-    _send_daily_summary(state, now_ms)
+    _send_daily_summary(state, now_ms, market)
     save_state(state)
 
 
