@@ -39,7 +39,7 @@
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "rojo",
-  "ml_rsi_last_closed_candle_1h": "1794319199999",
+  "ml_rsi_last_closed_candle_1h": "1794322799999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -769,7 +769,14 @@
     "5c74e19c25914a406ed64f19",
     "2001945e6efda6a59573a3c5",
     "724400d1a9e70c2644a748f6",
-    "489bcfbf4ea702c7be6b07ed"
+    "489bcfbf4ea702c7be6b07ed",
+    "c51cc1b43d540ca51312368b",
+    "58b176e1f48eabff40872911",
+    "eb6ff2e352a43a572fd29458",
+    "94ff4f687e730435d9620b92",
+    "e607a71fd67a4782da44c351",
+    "fa4378f9592812822dbbc49b",
+    "0114c65c318abbf95f1909a3"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -998,31 +1005,23 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794322563410,
-  "bitman_last_closed_1h": "1794319199999",
-  "bitman_live_signal_1h": "VENDER",
-  "bitman_live_candle_1h": "1794322799999",
+  "last_cycle_ms": 1794322867172,
+  "bitman_last_closed_1h": "1794322799999",
+  "bitman_live_signal_1h": "ESPERAR",
+  "bitman_live_candle_1h": "1794326399999",
   "bitman_last_closed_4h": "1794311999999",
   "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1794326399999",
   "bitman_last_closed_1d": "1794268799999",
   "bitman_live_signal_1d": "ESPERAR",
   "bitman_live_candle_1d": "1794355199999",
-  "koncorde_last_closed_1h": "1794319199999",
+  "koncorde_last_closed_1h": "1794322799999",
   "koncorde_live_position_1h": "baja",
   "koncorde_last_closed_4h": "1794311999999",
   "koncorde_live_position_4h": "baja",
   "koncorde_last_closed_1d": "1794268799999",
   "koncorde_live_position_1d": "baja",
-  "koncorde_last_closed_15m": "1794321899999",
+  "koncorde_last_closed_15m": "1794322799999",
   "koncorde_live_position_15m": "alza",
-  "daily_summary_sent": "2026-11-09",
-  "pending_ml_rsi_1h": {
-    "candle": "1794322799999",
-    "candidate": {
-      "signal": "rojo",
-      "event_id": "8b0b1b23bba372191133fcdf",
-      "detected_ms": 1794319223837
-    }
-  }
+  "daily_summary_sent": "2026-11-09"
 }
