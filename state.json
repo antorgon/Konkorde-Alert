@@ -493,7 +493,8 @@
     "7ef284606988c6f242e46492",
     "ea5f68b32d60b6ce33fe98fe",
     "5b67a543a453cdd8be2de7c8",
-    "e24ec9bcc7f3e02885da2a70"
+    "e24ec9bcc7f3e02885da2a70",
+    "11aebd63b7b40467a6141bb6"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -550,6 +551,11 @@
           "observed_time_ms": 1794251479206,
           "observed_price": 74674.62,
           "return_pct": -0.276942
+        },
+        "12h": {
+          "observed_time_ms": 1794273048627,
+          "observed_price": 75286.0,
+          "return_pct": 0.539516
         }
       }
     }
@@ -778,7 +784,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794272745374,
+  "last_cycle_ms": 1794273048627,
   "bitman_last_closed_1h": "1794272399999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1794275999999",
