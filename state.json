@@ -1443,7 +1443,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794413615617,
+  "last_cycle_ms": 1794413921364,
   "bitman_last_closed_1h": "1794412799999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1794416399999",
@@ -1463,7 +1463,7 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-11",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794413615617,
-  "last_data_ok_4h": 1794413615617,
-  "last_data_ok_1d": 1794413615617
+  "last_data_ok_1h": 1794413921364,
+  "last_data_ok_4h": 1794413921364,
+  "last_data_ok_1d": 1794413921364
 }
