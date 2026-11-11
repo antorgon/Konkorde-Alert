@@ -2,8 +2,7 @@
 Alertas BTCUSDT: BitMan, Koncorde y ML RSI
 =========================================
 El workflow consulta Binance cada cinco minutos y procesa de forma
-independiente H1, H4 y D1 para BitMan/Koncorde, H1 para ML RSI y M15 como
-observación de Koncorde sin avisos Telegram.
+independiente H1, H4 y D1 para BitMan/Koncorde y H1 para ML RSI.
 
 Los cambios detectados en la vela viva se notifican como provisionales y
 se resuelven al cierre. Los candidatos pendientes y los avisos enviados
@@ -18,6 +17,9 @@ import os
 import json
 import sys
 import tempfile
+import hashlib
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 import requests
@@ -26,17 +28,8 @@ import numpy as np
 
 SYMBOL = "BTCUSDT"
 LOOKBACK = 400
-STATE_FILE = "state.json"
 
 
-def _col(texto: str) -> str:
-    """Antepone 🟢/🔴 a 'alcista'/'bajista' (Telegram no soporta color de
-    texto real en sus mensajes, esto es el sustituto habitual)."""
-    if "alcista" in texto:
-        return f"🟢 {texto}"
-    if "bajista" in texto:
-        return f"🔴 {texto}"
-    return texto
 
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
@@ -484,77 +477,8 @@ def compute_ml_rsi(df: pd.DataFrame, rsi_length: int = ML_RSI_LENGTH,
     return df
 
 
-def construir_bloque_ml_rsi(df_ml: pd.DataFrame, interval: str, state: dict) -> str | None:
-    """Avisa cuando la señal del ML RSI cambia (verde=compra, rojo=venta,
-    gris=neutral). Mira la vela EN CURSO, igual que los otros 2 sistemas."""
-    resultado = detectar_transicion(
-        df_ml, state, f"last_mlrsi_{interval}",
-        calcular_valor=lambda d: d.iloc[-1]["ml_señal"],
-        log_prefix=f"[{interval}][ml_rsi]",
-    )
-    if resultado is None:
-        return None
-    señal_actual, señal_previa = resultado
-
-    ultima = df_ml.iloc[-1]
-    texto_map = {"verde": "🟢 verde", "rojo": "🔴 rojo", "gris": "⚪ gris"}
-    texto_señal = texto_map.get(señal_actual, señal_actual)
-    texto_previo = texto_map.get(señal_previa, señal_previa)
-
-    return (
-        f"<b>ML RSI {SYMBOL} {interval}</b>\n"
-        f"<b>{texto_previo} → {texto_señal}</b>\n"
-        f"RSI(27, mínimo, SMA4): {ultima['ml_rsi']:.1f}\n"
-        f"Umbral compra (largo): {ultima['ml_long_s']:.1f}\n"
-        f"Umbral venta (corto): {ultima['ml_short_s']:.1f}\n"
-        f"<b>Precio actual: {ultima['close']:.2f}</b>"
-    )
 
 
-def construir_bloque_bitman(df_ver: pd.DataFrame, interval: str, state: dict) -> str | None:
-    """Revisa el sistema de veredicto (2ª via, independiente del cruce) para
-    una temporalidad. 'df_ver' debe venir YA con compute_veredicto aplicado.
-    Mira la vela EN CURSO (iloc[-1], se sigue actualizando en vivo) para
-    detectar el cambio en el instante en que ocurre, sin esperar a que la
-    vela cierre -- por eso puede repintarse (el veredicto puede revertirse
-    antes de que la vela termine).
-    Actualiza 'state' in-place. Devuelve el texto del bloque (sin el
-    resumen de otras temporalidades, que se añade una sola vez al final del
-    mensaje combinado en main()) si hubo un cambio real que avisar, o None
-    si no hay nada nuevo."""
-    resultado = detectar_transicion(
-        df_ver, state, f"last_veredicto_{interval}",
-        calcular_valor=lambda d: d.iloc[-1]["veredicto"],
-        log_prefix=f"[{interval}][veredicto]",
-    )
-    if resultado is None:
-        return None
-    veredicto_actual, veredicto_previo = resultado
-
-    ultima = df_ver.iloc[-1]
-
-    if veredicto_actual == "COMPRAR":
-        motivo = _col("AO alcista") + " + ADX con impulso + Koncorde confirma acumulacion"
-    elif veredicto_actual == "VENDER":
-        motivo = _col("AO bajista") + " + ADX con impulso + Koncorde confirma distribucion"
-    else:
-        anterior = df_ver.iloc[-2]  # ultima vela ya cerrada, referencia para "¿el ADX esta subiendo?"
-        fila = dict(ultima)
-        fila["_adx_subiendo"] = ultima["adx"] > anterior["adx"]
-        motivo = _col(motivo_espera(fila))
-
-    bloque = (
-        f"<b>Bitman {SYMBOL} {interval}</b>\n"
-        f"<b>{veredicto_previo} → {veredicto_actual}</b>\n"
-        f"{motivo}\n"
-        f"AO: {ultima['ao']:.1f} ({_col(ultima['ao_estado'])})\n"
-        f"Koncorde (todo el valor): {ultima['kon_val']:.1f}\n"
-        f"ADX: {ultima['adx']:.1f}\n"
-        f"{bbwp_texto(ultima['bbwp'])}\n"
-        f"<b>Precio actual: {ultima['close']:.2f}</b>"
-    )
-    print(bloque)
-    return bloque
 
 
 # --------------------------- ESTADO (anti-duplicados) ---------------------------
@@ -586,34 +510,6 @@ def save_state(state: dict):
             os.remove(tmp_name)
 
 
-def detectar_transicion(df: pd.DataFrame, state: dict, state_key: str, calcular_valor, log_prefix: str):
-    """Boilerplate compartido por los sistemas de alerta: comprueba
-    que hay datos suficientes, calcula el valor actual, lo compara contra
-    el ultimo guardado en 'state[state_key]', actualiza el estado in-place,
-    y distingue 'primera vez' de 'cambio real'.
-    Devuelve (valor_actual, valor_previo) si hay un cambio real que avisar,
-    o None si no hay que avisar (datos insuficientes, sin cambio, o es la
-    primera vez que se registra esta temporalidad)."""
-    if len(df) < 2:
-        print(f"{log_prefix} Datos insuficientes, se omite esta pasada.")
-        return None
-
-    valor_actual = calcular_valor(df)
-    valor_previo = state.get(state_key)
-
-    if valor_previo == valor_actual:
-        print(f"{log_prefix} Sin cambio: sigue en {valor_actual}.")
-        return None
-
-    state[state_key] = valor_actual
-
-    if valor_previo is None:
-        # primera vez que se evalua esta temporalidad (arranque del ciclo):
-        # se guarda el valor base sin avisar, no es un cambio real
-        print(f"{log_prefix} Valor inicial registrado: {valor_actual}")
-        return None
-
-    return valor_actual, valor_previo
 
 
 # --------------------------- TELEGRAM ---------------------------
@@ -631,47 +527,9 @@ def send_telegram(message: str):
 
 
 # --------------------------- MAIN (revisa varias temporalidades) ---------------------------
-INTERVALS = ("1h", "1d")  # única fuente de verdad de las temporalidades
 
-CROSS_DESC = {
-    "alza": "Verde entra en la montaña (cruce al alza sobre media)",
-    "baja": "Verde sale de la montaña (cruce a la baja bajo media)",
-}
-
-CONFIRMED_DESC = {
-    "alza": "Entrada CONFIRMADA (3/3 filtros: valor + Trend Speed Analyzer + ADX alcista)",
-    "baja": "Salida CONFIRMADA (3/3 filtros: valor + Trend Speed Analyzer + ADX bajista)",
-}
-
-PARTIAL_DESC = {
-    "alza": "Entrada PARCIAL (2/3 condiciones alcistas)",
-    "baja": "Salida PARCIAL (2/3 condiciones bajistas)",
-}
-
-# Rango valido del valor de "verde" en el momento del cruce.
-#
-# Ajustado empiricamente con analisis_valor_verde.py sobre ~10 años de
-# historico de BTCUSDT 1h (todo el historico disponible en Binance),
-# agrupando todos los cruces por el valor de verde y midiendo el % de
-# aciertos y retorno medio a 24h. Sustituye la suposicion inicial (0-50
-# alza / -50-0 baja simetrico), que los datos no respaldaban:
-#
-#   - Alza: el rango 25-50 fue consistentemente el mejor en 3 muestras
-#     distintas (2, 6 y 10 años), con ~55-56% de aciertos sobre una
-#     muestra grande (n=1352 en la de 10 años) -> señal solida.
-#   - Baja: el patron resulto ser el opuesto al que se habia supuesto:
-#     cruces con verde <= -25 rindieron mejor (~63-68% de aciertos,
-#     consistente en las 3 muestras) que cruces cerca de 0, que rindieron
-#     peor que el azar (~40%). Por eso "baja" no tiene limite inferior.
-#
-# Nota: la muestra de "baja" (47 casos combinando <-50 y -50/-25 en la
-# medicion de 10 años) es bastante mas pequeña que la de "alza" (1352),
-# asi que esta señal tiene menos respaldo estadistico aunque el patron
-# sea consistente. Y como con cualquier analisis historico: rendimiento
-# pasado no garantiza nada hacia adelante.
 VALOR_MIN_ALZA, VALOR_MAX_ALZA = 25, 50
-VALOR_MAX_BAJA = -25  # sin limite inferior
-
+VALOR_MAX_BAJA = -25
 
 ICONO_VALOR = {"dentro": "🟢", "extendido": "🟡", "contrario": "🔴"}
 TEXTO_VALOR = {
@@ -724,162 +582,14 @@ def evaluar_condiciones_koncorde(vela, direccion: str) -> dict:
     }
 
 
-def _linea_temporalidad(iv: str, df: pd.DataFrame, df_ver: pd.DataFrame | None,
-                         df_ml: pd.DataFrame | None) -> str:
-    """Construye la linea de resumen (Koncorde + Bitman + ML RSI) para una
-    temporalidad dada, a partir de sus datos ya calculados."""
-    ult = df.iloc[-1]
-    direccion_actual = "alza" if ult["verde"] > ult["media"] else "baja"
-    c = evaluar_condiciones_koncorde(ult, direccion_actual)
-    koncorde_txt = "<b>" + _col("alcista" if direccion_actual == "alza" else "bajista") + f" {c['n_ok']}/3</b>"
-
-    bitman_txt = ""
-    if df_ver is not None:
-        v = df_ver.iloc[-1]["veredicto"]
-        icono = "🟢" if v == "COMPRAR" else "🔴" if v == "VENDER" else "⚪"
-        bitman_txt = f" · Bitman <b>{icono} {v}</b>"
-
-    mlrsi_txt = ""
-    if df_ml is not None and df_ml.iloc[-1]["ml_señal"] is not None:
-        s = df_ml.iloc[-1]["ml_señal"]
-        icono = "🟢" if s == "verde" else "🔴" if s == "rojo" else "⚪"
-        mlrsi_txt = f" · ML RSI <b>{icono} {s}</b>"
-
-    return f"{iv}: Koncorde {koncorde_txt}{bitman_txt}{mlrsi_txt}"
 
 
-def resumen_temporalidades(interval_actual: str, df_actual: pd.DataFrame, df_ver_actual: pd.DataFrame,
-                            df_ml_actual: pd.DataFrame, otros_dfs: dict, otros_ver: dict, otros_ml: dict) -> str:
-    """Una linea por cada temporalidad configurada,
-    combinando el estado EN VIVO de los 3 sistemas: posicion + condiciones
-    del Koncorde, el veredicto de Bitman, y la señal del ML RSI."""
-    lineas = [f"{_linea_temporalidad(interval_actual, df_actual, df_ver_actual, df_ml_actual)} (esta)"]
-    for iv in otros_dfs:
-        lineas.append(_linea_temporalidad(iv, otros_dfs[iv], otros_ver.get(iv), otros_ml.get(iv)))
-    return "<b>Temporalidades:</b>\n" + "\n".join(lineas)
 
 
-def construir_bloque_cruce(df: pd.DataFrame, interval: str, state: dict) -> str | None:
-    """Revisa una temporalidad y actualiza 'state' in-place. 'df' debe traer
-    ya calculados verde/marron/media (compute_koncorde), tsa_bullish
-    (compute_trend_speed) y adx/di_plus/di_minus (compute_adx).
-    Mira la vela EN CURSO (iloc[-1]) para detectar el cambio en el instante
-    en que 'verde' cruza 'media', sin esperar a que la vela cierre -- por
-    eso puede repintarse (el cruce puede revertirse antes de que la vela
-    termine).
-    Devuelve el texto del bloque -- el cruce y, si aplica, la
-    confirmacion/parcial YA FUSIONADOS EN UN SOLO TEXTO (sin el resumen de
-    otras temporalidades, que se añade una sola vez al final del mensaje
-    combinado en main()) -- si hubo un cambio real que avisar, o None si no
-    hay nada nuevo."""
-    resultado = detectar_transicion(
-        df, state, f"last_live_pos_{interval}",
-        calcular_valor=lambda d: "alza" if d.iloc[-1]["verde"] > d.iloc[-1]["media"] else "baja",
-        log_prefix=f"[{interval}]",
-    )
-    if resultado is None:
-        return None
-    direccion, _ = resultado
-
-    ultima = df.iloc[-1]
-    c = evaluar_condiciones_koncorde(ultima, direccion)
-    verde_val, tsa_bullish, adx_val = c["verde_val"], c["tsa_bullish"], c["adx_val"]
-    valor_estado = c["valor_estado"]
-    valor_ok, tsa_ok, adx_ok, n_ok = c["valor_ok"], c["tsa_ok"], c["adx_ok"], c["n_ok"]
-
-    def _icono(ok):
-        return "✅" if ok else "❌"
-
-    desglose = (
-        f"Valor verde: {verde_val:.1f} {ICONO_VALOR[valor_estado]} "
-        f"({TEXTO_VALOR[valor_estado]})\n"
-        f"Trend Speed Analyzer: {_col('alcista' if tsa_bullish else 'bajista')} {_icono(tsa_ok)}\n"
-        f"ADX: {adx_val:.1f} {_icono(adx_ok)} (≥{ADX_MEDIO:.0f} y DI dominante a favor)"
-    )
-
-    # --- Cruce (siempre) + confirmacion TOTAL (3/3) o PARCIAL (2/3) fusionados ---
-    partes = [
-        f"<b>Koncorde {SYMBOL} {interval}</b>\n"
-        f"<b>{CROSS_DESC[direccion]}</b>\n"
-        f"<b>Precio actual: {ultima['close']:.2f}</b>\n"
-        f"{desglose}"
-    ]
-
-    if n_ok == 3:
-        partes.append(f"<b>{CONFIRMED_DESC[direccion]}</b>")
-    elif n_ok == 2:
-        if not valor_ok:
-            fallo = "valor (" + TEXTO_VALOR[valor_estado] + ")"
-        elif not tsa_ok:
-            fallo = "Trend Speed Analyzer"
-        else:
-            fallo = "ADX"
-        partes.append(f"<b>{PARTIAL_DESC[direccion]}</b>\nFalta: {fallo}")
-    else:
-        print(
-            f"[{interval}] Solo {n_ok}/3 condiciones cumplidas "
-            f"(valor_ok={valor_ok}, tsa_ok={tsa_ok}, adx_ok={adx_ok}). Sin confirmacion/parcial."
-        )
-
-    bloque = "\n".join(partes)
-    print(bloque)
-    return bloque
 
 
-def calcular_temporalidad(interval: str):
-    """Descarga una temporalidad y calcula los tres conjuntos de indicadores."""
-    df = get_klines(interval=interval)
-    df = compute_koncorde(df)
-    df = compute_trend_speed(df)
-    df = compute_adx(df)
-    return df, compute_veredicto(df), compute_ml_rsi(df)
 
 
-def main():
-    state = load_state()
-    dfs, dfs_ver, dfs_ml = {}, {}, {}
-
-    # Primero calculamos todas las temporalidades para que cada alerta pueda
-    # incluir el resumen EN VIVO de las demás.
-    for interval in INTERVALS:
-        try:
-            dfs[interval], dfs_ver[interval], dfs_ml[interval] = calcular_temporalidad(interval)
-        except Exception as e:
-            print(f"[{interval}] [ERROR] {e}")
-
-    # Después procesamos las transiciones y enviamos, como antes, un mensaje
-    # por temporalidad cuando alguno de sus sistemas tiene una señal nueva.
-    for interval in INTERVALS:
-        if interval not in dfs:
-            continue
-
-        otros_dfs = {iv: dfs[iv] for iv in INTERVALS if iv != interval and iv in dfs}
-        otros_ver = {iv: dfs_ver[iv] for iv in INTERVALS if iv != interval and iv in dfs_ver}
-        otros_ml = {iv: dfs_ml[iv] for iv in INTERVALS if iv != interval and iv in dfs_ml}
-
-        bloques = []
-        for nombre, funcion, datos in (
-            ("cruce", construir_bloque_cruce, dfs[interval]),
-            ("veredicto", construir_bloque_bitman, dfs_ver[interval]),
-            ("ml_rsi", construir_bloque_ml_rsi, dfs_ml[interval]),
-        ):
-            try:
-                bloque = funcion(datos, interval, state)
-                if bloque:
-                    bloques.append(bloque)
-            except Exception as e:
-                print(f"[{interval}][{nombre}] [ERROR] {e}")
-
-        if bloques:
-            resumen = resumen_temporalidades(
-                interval, dfs[interval], dfs_ver.get(interval), dfs_ml.get(interval),
-                otros_dfs, otros_ver, otros_ml,
-            )
-            send_telegram("\n\n".join(bloques) + f"\n{resumen}")
-
-    # Se guarda siempre: detectar_transicion también persiste los valores
-    # iniciales aunque no haya generado una alerta.
-    save_state(state)
 
 
 
@@ -889,21 +599,15 @@ def main():
 # ============================================================================
 # Se conservan las funciones de cálculo existentes. Esta sección sustituye
 # el main anterior y separa temporalidades, cierres de vela e histórico.
-import hashlib
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
-
 STATE_FILE = "state.json"
 HISTORY_FILE = "signals_history.jsonl"
 LOOKBACK = 1000
 
 BITMAN_INTERVALS = ("1h", "4h", "1d")
 KONCORDE_INTERVALS = ("1h", "4h", "1d")
-KONCORDE_OBSERVE_INTERVALS = ("15m",)
 ML_RSI_INTERVALS = ("1h",)
 
 INTERVAL_MS = {
-    "15m": 15 * 60 * 1000,
     "1h": 60 * 60 * 1000,
     "4h": 4 * 60 * 60 * 1000,
     "1d": 24 * 60 * 60 * 1000,
@@ -1040,28 +744,8 @@ def _track_outcomes(state: dict, current_price: float, now_ms: int):
             events.pop(event_id, None)
 
 
-def _trackable_direction(system: str, signal: str):
-    s = str(signal).upper()
-    if s in ("COMPRAR", "VERDE", "ALZA", "ALCISTA", "BULLISH"):
-        return "bullish"
-    if s in ("VENDER", "ROJO", "BAJA", "BAJISTA", "BEARISH"):
-        return "bearish"
-    return None
 
 
-def _store_trackable(state: dict, event_id: str, system: str, interval: str,
-                     signal: str, event_time_ms: int, price: float):
-    direction = _trackable_direction(system, signal)
-    if direction:
-        state.setdefault("tracked_events", {}).setdefault(event_id, {
-            "system": system,
-            "interval": interval,
-            "signal": signal,
-            "direction": direction,
-            "event_time_ms": int(event_time_ms),
-            "price": float(price),
-            "outcomes": {},
-        })
 
 
 def _indicators_for_history(row, include_koncorde=True):
@@ -1082,9 +766,6 @@ def _indicators_for_history(row, include_koncorde=True):
     return result
 
 
-def _send_block(block: str):
-    if block:
-        send_telegram(block)
 
 
 def _format_event_id(eid: str) -> str:
@@ -1290,8 +971,8 @@ def _process_bitman(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFram
 
 
 def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFrame,
-                      state: dict, observation_only: bool = False):
-    """Registra todos los cruces; Telegram solo para candidatos 2/3 o 3/3."""
+                      state: dict):
+    """Registra cruces; solo envía candidatos con al menos 2/3 filtros."""
     if len(df_live) < 3:
         return
     row = df_live.iloc[-1]
@@ -1306,8 +987,7 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
             pending_pos = "alza" if float(pending_close["verde"]) > float(pending_close["media"]) else "baja"
             pending_filters = evaluar_condiciones_koncorde(pending_close, pending_pos)
             _resolve_pending("koncorde", interval, pending_close, state,
-                             pending_pos, pending_valid and not observation_only,
-                             int(pending_filters["n_ok"]))
+                             pending_pos, pending_valid, int(pending_filters["n_ok"]))
         closed_row = df_closed.iloc[-1]
         closed_pos = "alza" if float(closed_row["verde"]) > float(closed_row["media"]) else "baja"
         cclose = evaluar_condiciones_koncorde(closed_row, closed_pos)
@@ -1316,14 +996,14 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         if state.get(closed_key) != closed_id:
             state[closed_key] = closed_id
             _record_event(
-                state, system="koncorde_observation" if observation_only else "koncorde",
-                interval=interval, kind="closed_bar_position", signal=closed_pos,
+                state, system="koncorde", interval=interval,
+                kind="closed_bar_position", signal=closed_pos,
                 price=float(closed_row["close"]),
-                event_time_ms=int(pd.Timestamp(closed_row["close_time"]).timestamp()*1000),
-                status="observation" if observation_only else "closed",
+                event_time_ms=int(pd.Timestamp(closed_row["close_time"]).timestamp() * 1000),
+                status="closed",
                 indicators={**_indicators_for_history(closed_row),
                             "filters": int(cclose["n_ok"]),
-                            "green_yellow_distance": abs(float(closed_row["verde"])-float(closed_row["media"])),
+                            "green_yellow_distance": abs(float(closed_row["verde"]) - float(closed_row["media"])),
                             "cross_persisted_at_close": bool(
                                 len(df_closed) >= 2 and
                                 ((float(df_closed.iloc[-2]["verde"]) <= float(df_closed.iloc[-2]["media"]) and closed_pos == "alza") or
@@ -1338,17 +1018,6 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         print(f"[KONCORDE {interval}] Línea base: {pos}; sin aviso inicial.")
         return
     if pos == previous:
-        # Registrar distancia en cada pasada M15/H1/H4/D1 sin generar alertas.
-        if observation_only:
-            _record_event(
-                state, system="koncorde_observation", interval=interval,
-                kind="intrabar_sample", signal=pos, price=float(row["close"]),
-                event_time_ms=_utc_now_ms(), status="observation",
-                indicators={"verde": _safe_float(row["verde"]),
-                            "media": _safe_float(row["media"]),
-                            "green_yellow_distance": abs(float(row["verde"])-float(row["media"]))},
-                telegram_sent=False,
-            )
         return
 
     c = evaluar_condiciones_koncorde(row, pos)
@@ -1360,33 +1029,25 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         "adx_ok": bool(c["adx_ok"]), "n_ok": n_ok,
         "value_state": c["valor_estado"],
     }
-    eid = _record_event(
-        state, system="koncorde_observation" if observation_only else "koncorde",
-        interval=interval, kind="intrabar_cross", signal=direction,
-        price=float(row["close"]), event_time_ms=event_ms,
-        status="observation" if observation_only else ("candidate" if n_ok >= 2 else "weak"),
+    _record_event(
+        state, system="koncorde", interval=interval, kind="intrabar_cross",
+        signal=direction, price=float(row["close"]), event_time_ms=event_ms,
+        status="candidate" if n_ok >= 2 else "weak",
         indicators={**_indicators_for_history(row), "filters": filters,
-                    "green_yellow_distance": abs(float(row["verde"])-float(row["media"]))},
+                    "green_yellow_distance": abs(float(row["verde"]) - float(row["media"]))},
         telegram_sent=False,
     )
-
-    if observation_only:
-        state[pos_key] = pos
-        print(f"[KONCORDE M15] Cruce observado {direction}; {n_ok}/3; sin Telegram.")
-        return
 
     pending = state.get(key)
     old_candidate = pending.get("candidate") if pending and pending.get("candle") == candle else None
     if n_ok >= 2:
-        if old_candidate and old_candidate.get("signal") == pos and not old_candidate.get("invalidated"):
-            pass
-        else:
+        if not (old_candidate and old_candidate.get("signal") == pos and not old_candidate.get("invalidated")):
             value_text = f"{c['verde_val']:.1f} {ICONO_VALOR[c['valor_estado']]} ({TEXTO_VALOR[c['valor_estado']]})"
-            rango_text = c["rango_valor_txt"]
             indicators = {
                 "Valor verde": value_text,
-                "Rango de referencia del valor verde": rango_text,
+                "Rango de referencia del valor verde": c["rango_valor_txt"],
                 "Valor verde (dato capturado)": _safe_float(row["verde"]),
+                "Media verde": _safe_float(row["media"]),
                 "Trend Speed Analyzer": f"{'alcista' if c['tsa_bullish'] else 'bajista'} {'✅' if c['tsa_ok'] else '❌'}",
                 "ADX": f"{c['adx_val']:.1f} {'✅' if c['adx_ok'] else '❌'} (DI+ {float(row['di_plus']):.1f} / DI- {float(row['di_minus']):.1f})",
                 "Filtros": f"{n_ok}/3",
@@ -1410,15 +1071,15 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
                 "filters": n_ok, "detected_ms": event_ms,
             }}
     elif old_candidate and old_candidate.get("signal") != pos:
-        # Cruce débil contrario invalida la candidatura anterior, no la sustituye.
         state[key]["candidate"]["invalidated"] = True
         _record_event(
             state, system="koncorde", interval=interval,
             kind="candidate_invalidated", signal=direction,
             price=float(row["close"]), event_time_ms=event_ms,
-            status="invalidated", indicators={"previous_event_id": old_candidate.get("event_id"),
-                                               "weak_filters": n_ok},
-            telegram_sent=False,
+            status="invalidated", indicators={
+                "previous_event_id": old_candidate.get("event_id"),
+                "weak_filters": n_ok,
+            }, telegram_sent=False,
         )
     state[pos_key] = pos
 
@@ -1511,25 +1172,6 @@ def _process_ml_rsi(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFram
         state[live_key] = signal
 
 
-def _calculate_base(interval: str):
-    raw = get_klines(interval=interval, limit=LOOKBACK)
-    closed, live = split_closed_live(raw, interval)
-    if len(closed) < 100:
-        raise ValueError(f"Datos cerrados insuficientes para {interval}: {len(closed)}")
-    # Indicadores sobre datos cerrados y, cuando se necesita RSI inmediato,
-    # sobre el conjunto que incluye la vela en curso.
-    df_closed = compute_koncorde(closed.copy())
-    df_closed = compute_trend_speed(df_closed)
-    df_closed = compute_adx(df_closed)
-    df_closed = compute_veredicto(df_closed)
-
-    df_live = None
-    if not live.empty:
-        combined = pd.concat([closed.tail(LOOKBACK), live], ignore_index=True)
-        df_live = compute_ml_rsi(combined.copy())
-    else:
-        df_live = compute_ml_rsi(closed.copy())
-    return df_closed, df_live
 
 
 def _log_data_error(state: dict, interval: str, exc: Exception, now_ms: int):
@@ -1565,9 +1207,16 @@ def _clear_data_error(state: dict, interval: str):
         })
 
 
+def _hora_vela(row, interval: str, en_curso: bool) -> str:
+    """Describe la vela utilizada, separada de la hora de consulta del bot."""
+    cierre = pd.Timestamp(row["close_time"]).to_pydatetime().astimezone(
+        ZoneInfo("Europe/Madrid")
+    ).strftime("%d/%m %H:%M")
+    return f"en curso (cierre {cierre})" if en_curso else f"última cerrada ({cierre})"
+
+
 def _estado_intervalo(interval: str, market: dict, state: dict) -> tuple[str, str]:
-    """Devuelve estado operativo actual y marca temporal de la última lectura válida."""
-    item = market.get(interval)
+    """Devuelve el estado de datos y la hora de la última lectura válida."""
     last_ok = state.get(f"last_data_ok_{interval}")
     updated = (
         datetime.fromtimestamp(int(last_ok) / 1000, tz=timezone.utc)
@@ -1575,15 +1224,80 @@ def _estado_intervalo(interval: str, market: dict, state: dict) -> tuple[str, st
         if last_ok else "sin registro"
     )
     error = state.get(f"data_error_{interval}")
-    if item is None:
+    if market.get(interval) is None:
         if error:
             return f"⚠️ SIN DATOS VÁLIDOS · {str(error.get('message', 'error'))[:100]}", updated
         return "⚠️ SIN DATOS EN ESTE CICLO", updated
     return "", updated
 
 
+def _bitman_resumen(interval: str, item: dict, state: dict) -> str:
+    df = item["live"]
+    row = df.iloc[-1]
+    previous_row = df.iloc[-2]
+    signal = str(row["veredicto"])
+    ao_state = str(row.get("ao_estado") or "sin clasificación")
+    adx_rising = float(row["adx"]) > float(previous_row["adx"])
+    kon_value = float(row["kon_val"])
+    if signal == "COMPRAR":
+        reason = "Condiciones alineadas: AO alcista, ADX subiendo y Koncorde positivo"
+        icon = "🟢"
+    elif signal == "VENDER":
+        reason = "Condiciones alineadas: AO bajista, ADX subiendo y Koncorde negativo"
+        icon = "🔴"
+    else:
+        reason = motivo_espera({**dict(row), "_adx_subiendo": adx_rising})
+        icon = "⚪"
+    pending = state.get(f"pending_bitman_{interval}", {}).get("candidate")
+    if pending:
+        reason += f" · provisional pendiente: {pending.get('signal', 'sin detalle')}"
+    vela = _hora_vela(row, interval, bool(item.get("has_live")))
+    return (
+        f"{interval.upper()}: {icon} <b>{signal}</b> · {reason}\n"
+        f"   AO: {float(row['ao']):.2f} ({ao_state}) · "
+        f"ADX: {float(row['adx']):.1f} ({'subiendo' if adx_rising else 'no sube'}) · "
+        f"Koncorde: {kon_value:.2f} ({'positivo' if kon_value > 0 else 'negativo' if kon_value < 0 else 'neutro'})\n"
+        f"   Vela analizada: {vela}"
+    )
+
+
+def _koncorde_resumen(interval: str, item: dict, state: dict) -> str:
+    df = item["live"]
+    row = df.iloc[-1]
+    position = "alza" if float(row["verde"]) > float(row["media"]) else "baja"
+    c = evaluar_condiciones_koncorde(row, position)
+    value_icon = "✅" if c["valor_ok"] else "❌"
+    tsa_icon = "✅" if c["tsa_ok"] else "❌"
+    adx_icon = "✅" if c["adx_ok"] else "❌"
+    value_label = {
+        "dentro": "dentro del rango",
+        "extendido": "extendido (filtro aceptado)",
+        "contrario": "signo contrario",
+    }[c["valor_estado"]]
+    tsa_label = "alcista" if c["tsa_bullish"] else "bajista"
+    di_label = "DI+ dominante" if float(row["di_plus"]) > float(row["di_minus"]) else "DI- dominante"
+    candidate = state.get(f"pending_koncorde_{interval}", {}).get("candidate")
+    if candidate:
+        direction = "alcista" if candidate.get("signal") == "alza" else "bajista"
+        pending_text = f" · CANDIDATO PENDIENTE: {direction} {candidate.get('filters', '?')}/3"
+        if candidate.get("invalidated"):
+            pending_text += " (marcado para invalidación al cierre)"
+    else:
+        pending_text = " · Sin candidato provisional pendiente"
+    vela = _hora_vela(row, interval, bool(item.get("has_live")))
+    return (
+        f"{interval.upper()}: <b>posición {position.upper()} · filtros {c['n_ok']}/3</b>{pending_text}\n"
+        f"   Verde: {float(row['verde']):.2f} · Media: {float(row['media']):.2f} · "
+        f"Distancia: {abs(float(row['verde']) - float(row['media'])):.2f}\n"
+        f"   Valor: {value_icon} {value_label} ({c['rango_valor_txt']}) · "
+        f"TSA: {tsa_icon} {tsa_label} · "
+        f"ADX: {adx_icon} {float(row['adx']):.1f}, {di_label}\n"
+        f"   Vela analizada: {vela}"
+    )
+
+
 def _send_daily_summary(state: dict, now_ms: int, market: dict):
-    """Envía a las 08:00 una fotografía de los estados actuales, no un recuento del día anterior."""
+    """Envía a las 08:00 una fotografía de los estados actuales en español."""
     madrid = ZoneInfo("Europe/Madrid")
     now = datetime.fromtimestamp(now_ms / 1000, tz=timezone.utc).astimezone(madrid)
     if now.hour < 8:
@@ -1596,40 +1310,24 @@ def _send_daily_summary(state: dict, now_ms: int, market: dict):
         f"<b>ESTADO ACTUAL DE LOS SISTEMAS · {SYMBOL}</b>",
         f"{now.strftime('%d/%m/%Y · %H:%M:%S')} (hora de Madrid)",
         "",
-        "<b>BITMAN</b>",
+        "<b>BITMAN · ESTADO Y MOTIVO</b>",
     ]
     for interval in BITMAN_INTERVALS:
         item = market.get(interval)
         if item is None:
             status, updated = _estado_intervalo(interval, market, state)
             lines.append(f"{interval.upper()}: {status} · Último dato válido: {updated}")
-            continue
-        row = item["live"].iloc[-1] if not item["live"].empty else item["closed"].iloc[-1]
-        signal = str(row.get("veredicto", "SIN ESTADO"))
-        icon = "🟢" if signal == "COMPRAR" else "🔴" if signal == "VENDER" else "⚪"
-        pending = state.get(f"pending_bitman_{interval}", {}).get("candidate")
-        suffix = f" · provisional pendiente ({pending.get('signal')})" if pending else ""
-        _, updated = _estado_intervalo(interval, market, state)
-        lines.append(f"{interval.upper()}: {icon} {signal}{suffix} · Dato: {updated}")
+        else:
+            lines.append(_bitman_resumen(interval, item, state))
 
-    lines.extend(["", "<b>KONCORDE</b>"])
+    lines.extend(["", "<b>KONCORDE · POSICIÓN Y FILTROS</b>"])
     for interval in KONCORDE_INTERVALS:
         item = market.get(interval)
         if item is None:
             status, updated = _estado_intervalo(interval, market, state)
             lines.append(f"{interval.upper()}: {status} · Último dato válido: {updated}")
-            continue
-        row = item["live"].iloc[-1] if not item["live"].empty else item["closed"].iloc[-1]
-        position = "alza" if float(row["verde"]) > float(row["media"]) else "baja"
-        candidate = state.get(f"pending_koncorde_{interval}", {}).get("candidate")
-        if candidate:
-            direction = "alcista" if candidate.get("signal") == "alza" else "bajista"
-            filters = candidate.get("filters", "?")
-            status = f"candidato {direction} · {filters}/3 filtros"
         else:
-            status = f"sin candidato pendiente · posición actual {position}"
-        _, updated = _estado_intervalo(interval, market, state)
-        lines.append(f"{interval.upper()}: {status} · Dato: {updated}")
+            lines.append(_koncorde_resumen(interval, item, state))
 
     lines.extend(["", "<b>ML RSI</b>"])
     for interval in ML_RSI_INTERVALS:
@@ -1642,30 +1340,24 @@ def _send_daily_summary(state: dict, now_ms: int, market: dict):
         signal = str(row.get("ml_señal", "sin clasificación"))
         icon = "🟢" if signal == "verde" else "🔴" if signal == "rojo" else "⚪"
         candidate = state.get(f"pending_ml_rsi_{interval}", {}).get("candidate")
-        suffix = f" · provisional pendiente ({candidate.get('signal')})" if candidate else ""
-        _, updated = _estado_intervalo(interval, market, state)
-        lines.append(f"{interval.upper()}: {icon} {signal.upper()}{suffix} · Dato: {updated}")
-
-    lines.extend(["", "<b>KONCORDE M15 · OBSERVACIÓN</b>"])
-    item = market.get("15m")
-    if item is None:
-        status, updated = _estado_intervalo("15m", market, state)
-        lines.append(f"{status} · Último dato válido: {updated}")
-    else:
-        row = item["live"].iloc[-1] if not item["live"].empty else item["closed"].iloc[-1]
-        distance = abs(float(row["verde"]) - float(row["media"]))
-        position = "alza" if float(row["verde"]) > float(row["media"]) else "baja"
-        _, updated = _estado_intervalo("15m", market, state)
-        lines.append(f"Observación activa · Posición {position} · Distancia verde-media: {distance:.2f} · Dato: {updated}")
-    lines.append("Sin avisos operativos de Telegram en esta temporalidad.")
+        suffix = f" · Provisional pendiente: {candidate.get('signal')}" if candidate else ""
+        vela = _hora_vela(row, interval, bool(item.get("has_live")))
+        lines.append(
+            f"{interval.upper()}: {icon} <b>{signal.upper()}</b>{suffix} · "
+            f"RSI: {_safe_float(row.get('ml_rsi')):.1f} · Vela: {vela}"
+            if _safe_float(row.get("ml_rsi")) is not None
+            else f"{interval.upper()}: {icon} <b>{signal.upper()}</b>{suffix} · Vela: {vela}"
+        )
 
     active_errors = []
-    for interval in sorted(set(BITMAN_INTERVALS + KONCORDE_INTERVALS +
-                               KONCORDE_OBSERVE_INTERVALS + ML_RSI_INTERVALS),
+    for interval in sorted(set(BITMAN_INTERVALS + KONCORDE_INTERVALS + ML_RSI_INTERVALS),
                            key=lambda x: INTERVAL_MS[x]):
         error = state.get(f"data_error_{interval}")
         if error:
-            active_errors.append(f"{interval.upper()}: {error.get('count', 0)} ciclos · {str(error.get('message', 'error'))[:100]}")
+            active_errors.append(
+                f"{interval.upper()}: {error.get('count', 0)} ciclos · "
+                f"{str(error.get('message', 'error'))[:100]}"
+            )
     lines.extend(["", "<b>FUNCIONAMIENTO</b>"])
     lines.append(f"Último ciclo del bot: {now.strftime('%H:%M:%S')} (Madrid)")
     if active_errors:
@@ -1697,8 +1389,7 @@ def main():
     state["last_cycle_ms"] = now_ms
     _append_history({"record_type": "bot_cycle", "event_time_ms": now_ms})
     current_price = None
-    required = sorted(set(BITMAN_INTERVALS + KONCORDE_INTERVALS +
-                          KONCORDE_OBSERVE_INTERVALS + ML_RSI_INTERVALS),
+    required = sorted(set(BITMAN_INTERVALS + KONCORDE_INTERVALS + ML_RSI_INTERVALS),
                       key=lambda x: INTERVAL_MS[x])
     market = {}
 
@@ -1756,19 +1447,10 @@ def main():
     for interval in KONCORDE_INTERVALS:
         if interval in market:
             try:
-                _process_koncorde(interval, market[interval]["live"], market[interval]["closed"], state, False)
+                _process_koncorde(interval, market[interval]["live"], market[interval]["closed"], state)
             except Exception as exc:
                 print(f"[KONCORDE {interval}] [ERROR] {exc}")
                 _append_history({"record_type": "processing_error", "system": "koncorde",
-                                 "interval": interval, "event_time_ms": _utc_now_ms(), "message": str(exc)[:500]})
-
-    for interval in KONCORDE_OBSERVE_INTERVALS:
-        if interval in market:
-            try:
-                _process_koncorde(interval, market[interval]["live"], market[interval]["closed"], state, True)
-            except Exception as exc:
-                print(f"[KONCORDE OBS {interval}] [ERROR] {exc}")
-                _append_history({"record_type": "processing_error", "system": "koncorde_observation",
                                  "interval": interval, "event_time_ms": _utc_now_ms(), "message": str(exc)[:500]})
 
     for interval in ML_RSI_INTERVALS:
