@@ -39,7 +39,7 @@
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "gris",
-  "ml_rsi_last_closed_candle_1h": "1794416399999",
+  "ml_rsi_last_closed_candle_1h": "1794419999999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -1217,7 +1217,12 @@
     "bc9c806f442ce2f1027eaa89",
     "d1b2cd358e1283c82387e252",
     "5101513412a4407095f82ea3",
-    "cb5237538e9b7b4eb62934e8"
+    "cb5237538e9b7b4eb62934e8",
+    "18d26184774a10efe4b9480f",
+    "9be013351534ab7a775d0833",
+    "427ca38f9ef413e046de2fa3",
+    "eb1ba742bc68dc5b58abf2be",
+    "4f8f5846666889f5c5780d46"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -1446,17 +1451,17 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794419727506,
-  "bitman_last_closed_1h": "1794416399999",
-  "bitman_live_signal_1h": "ESPERAR",
-  "bitman_live_candle_1h": "1794419999999",
+  "last_cycle_ms": 1794420032672,
+  "bitman_last_closed_1h": "1794419999999",
+  "bitman_live_signal_1h": "COMPRAR",
+  "bitman_live_candle_1h": "1794423599999",
   "bitman_last_closed_4h": "1794412799999",
   "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1794427199999",
   "bitman_last_closed_1d": "1794355199999",
   "bitman_live_signal_1d": "ESPERAR",
   "bitman_live_candle_1d": "1794441599999",
-  "koncorde_last_closed_1h": "1794416399999",
+  "koncorde_last_closed_1h": "1794419999999",
   "koncorde_live_position_1h": "alza",
   "koncorde_last_closed_4h": "1794412799999",
   "koncorde_live_position_4h": "alza",
@@ -1466,7 +1471,16 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-11",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794419727506,
-  "last_data_ok_4h": 1794419727506,
-  "last_data_ok_1d": 1794419727506
+  "last_data_ok_1h": 1794420032672,
+  "last_data_ok_4h": 1794420032672,
+  "last_data_ok_1d": 1794420032672,
+  "pending_bitman_1h": {
+    "candle": "1794423599999",
+    "candidate": {
+      "signal": "COMPRAR",
+      "event_id": "9be013351534ab7a775d0833",
+      "detected_ms": 1794420037682
+    },
+    "final_filter_count": 3
+  }
 }
