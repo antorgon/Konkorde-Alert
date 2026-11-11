@@ -39,7 +39,7 @@
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "gris",
-  "ml_rsi_last_closed_candle_1h": "1794419999999",
+  "ml_rsi_last_closed_candle_1h": "1794423599999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -1222,7 +1222,11 @@
     "9be013351534ab7a775d0833",
     "427ca38f9ef413e046de2fa3",
     "eb1ba742bc68dc5b58abf2be",
-    "4f8f5846666889f5c5780d46"
+    "4f8f5846666889f5c5780d46",
+    "60705057faf1822de1203859",
+    "c525f9b8957d19ce1a3c5c7a",
+    "69dbec80db5211094e25d15a",
+    "38c51f4469473c5cce64b3ca"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -1451,17 +1455,17 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794423396362,
-  "bitman_last_closed_1h": "1794419999999",
+  "last_cycle_ms": 1794423701638,
+  "bitman_last_closed_1h": "1794423599999",
   "bitman_live_signal_1h": "COMPRAR",
-  "bitman_live_candle_1h": "1794423599999",
+  "bitman_live_candle_1h": "1794427199999",
   "bitman_last_closed_4h": "1794412799999",
   "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1794427199999",
   "bitman_last_closed_1d": "1794355199999",
   "bitman_live_signal_1d": "ESPERAR",
   "bitman_live_candle_1d": "1794441599999",
-  "koncorde_last_closed_1h": "1794419999999",
+  "koncorde_last_closed_1h": "1794423599999",
   "koncorde_live_position_1h": "alza",
   "koncorde_last_closed_4h": "1794412799999",
   "koncorde_live_position_4h": "alza",
@@ -1471,16 +1475,7 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-11",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794423396362,
-  "last_data_ok_4h": 1794423396362,
-  "last_data_ok_1d": 1794423396362,
-  "pending_bitman_1h": {
-    "candle": "1794423599999",
-    "candidate": {
-      "signal": "COMPRAR",
-      "event_id": "9be013351534ab7a775d0833",
-      "detected_ms": 1794420037682
-    },
-    "final_filter_count": 3
-  }
+  "last_data_ok_1h": 1794423701638,
+  "last_data_ok_4h": 1794423701638,
+  "last_data_ok_1d": 1794423701638
 }
