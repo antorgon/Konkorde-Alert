@@ -39,7 +39,7 @@
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "gris",
-  "ml_rsi_last_closed_candle_1h": "1794430799999",
+  "ml_rsi_last_closed_candle_1h": "1794434399999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -1237,7 +1237,12 @@
     "59786ca80d32601f78464971",
     "886c2d220c4241fec46f1966",
     "b0ed2212f33cf0b0b7f2b228",
-    "36173350d2dc097c2965d23b"
+    "36173350d2dc097c2965d23b",
+    "24089fe9c01002b725bd47aa",
+    "9af868d62ae151d463356292",
+    "f96b709ffdf451fe3a017422",
+    "66e025ae280caf703a0f18a6",
+    "a2da8171d3b43d6b6ae89523"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -1466,17 +1471,17 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794434286635,
-  "bitman_last_closed_1h": "1794430799999",
-  "bitman_live_signal_1h": "COMPRAR",
-  "bitman_live_candle_1h": "1794434399999",
+  "last_cycle_ms": 1794434590389,
+  "bitman_last_closed_1h": "1794434399999",
+  "bitman_live_signal_1h": "ESPERAR",
+  "bitman_live_candle_1h": "1794437999999",
   "bitman_last_closed_4h": "1794427199999",
   "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1794441599999",
   "bitman_last_closed_1d": "1794355199999",
   "bitman_live_signal_1d": "ESPERAR",
   "bitman_live_candle_1d": "1794441599999",
-  "koncorde_last_closed_1h": "1794430799999",
+  "koncorde_last_closed_1h": "1794434399999",
   "koncorde_live_position_1h": "alza",
   "koncorde_last_closed_4h": "1794427199999",
   "koncorde_live_position_4h": "alza",
@@ -1486,16 +1491,7 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-11",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794434286635,
-  "last_data_ok_4h": 1794434286635,
-  "last_data_ok_1d": 1794434286635,
-  "pending_bitman_1h": {
-    "candle": "1794434399999",
-    "candidate": {
-      "signal": "COMPRAR",
-      "event_id": "59786ca80d32601f78464971",
-      "detected_ms": 1794430950173
-    },
-    "final_filter_count": 3
-  }
+  "last_data_ok_1h": 1794434590389,
+  "last_data_ok_4h": 1794434590389,
+  "last_data_ok_1d": 1794434590389
 }
