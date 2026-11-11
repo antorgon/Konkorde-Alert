@@ -1703,3 +1703,5 @@
 {"record_type":"bot_cycle","event_time_ms":1794391715487}
 {"record_type":"bot_cycle","event_time_ms":1794392018682}
 {"record_type":"bot_cycle","event_time_ms":1794392321753}
+{"record_type":"bot_cycle","event_time_ms":1794392624999}
+{"record_type":"signal","event_id":"751fd95d0ba6b29aa6821056","symbol":"BTCUSDT","system":"koncorde","interval":"1h","kind":"intrabar_cross","signal":"alcista","status":"weak","event_time_ms":1794392626560,"event_time_utc":"2026-11-11T10:23:46.560000+00:00","detected_time_ms":1794392626560,"sent_time_ms":null,"candle_time_ms":null,"price":73897.2,"telegram_sent":false,"indicators":{"close":73897.2,"verde":49.67649722441354,"marron":59.94425120551071,"media":48.71525414221006,"tsa_bullish":false,"adx":19.23906659023305,"di_plus":14.79662763931629,"di_minus":16.94158623041147,"ao":-219.37558823528525,"ao_estado":"retroceso_bajista","kon_val":59.94425120551071,"bbwp":28.968253968253972,"filters":{"value_ok":true,"tsa_ok":false,"adx_ok":false,"n_ok":1,"value_state":"dentro"},"green_yellow_distance":0.961243082203481}}
