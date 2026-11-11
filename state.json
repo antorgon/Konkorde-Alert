@@ -990,7 +990,8 @@
     "1ad973054a20c988e72cd3ee",
     "533be0ae601b363cf462c01c",
     "784fd270c8c517c1b608faad",
-    "367cfef087f27de72e04644d"
+    "367cfef087f27de72e04644d",
+    "47d5746d4c6bca4d3d06050b"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -1219,7 +1220,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794358147696,
+  "last_cycle_ms": 1794358450740,
   "bitman_last_closed_1h": "1794355199999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1794358799999",
@@ -1238,10 +1239,10 @@
   "koncorde_last_closed_15m": "1794357899999",
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-10",
-  "last_data_ok_15m": 1794358147696,
-  "last_data_ok_1h": 1794358147696,
-  "last_data_ok_4h": 1794358147696,
-  "last_data_ok_1d": 1794358147696,
+  "last_data_ok_15m": 1794358450740,
+  "last_data_ok_1h": 1794358450740,
+  "last_data_ok_4h": 1794358450740,
+  "last_data_ok_1d": 1794358450740,
   "pending_koncorde_1h": {
     "candle": "1794358799999",
     "candidate": {
