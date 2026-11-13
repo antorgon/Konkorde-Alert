@@ -1,21 +1,21 @@
-# Bot de alertas BTCUSDT — revisión simplificada
+# Bot de alertas BTCUSDT — revisión v5
 
 ## Archivos
 - `koncorde_alert.py`: programa principal.
 - `koncorde.yml`: workflow de GitHub Actions.
 - `README.md`: documentación de esta revisión.
 
-## Cambios
+## Resumen diario de las 08:00 (Europe/Madrid)
+El resumen se ha simplificado para mostrar solo la información operativa:
+- Cabecera con el precio actual de BTCUSDT, sin una segunda línea de fecha y hora.
+- **BitMan H1/H4/D1:** veredicto y motivo; AO solo como estado, ADX solo como tendencia y Koncorde como entrada/salida de zona positiva o montaña positiva/negativa. Añade BBWP como referencia informativa de volatilidad.
+- **Koncorde H1/H4/D1:** una única línea por temporalidad con posición, puntuación de filtros y explicación breve de cada filtro.
+- **ML RSI H1:** color y RSI.
+- Se eliminan del resumen las referencias a las velas analizadas, sus cierres, el apartado de funcionamiento y los datos repetidos de AO/ADX/Koncorde.
 
-### Resumen diario de las 08:00 (Europe/Madrid)
-El resumen muestra el estado actual de los sistemas, no estadísticas históricas:
-- **BitMan H1/H4/D1:** veredicto, motivo, AO, ADX (si sube o no) y valor de Koncorde.
-- **Koncorde H1/H4/D1:** posición verde/media, valores verde y media, distancia, resultado individual de los tres filtros y puntuación total. También indica si existe un candidato provisional pendiente.
-- **ML RSI H1:** color actual y valor RSI.
-- Distingue la hora de consulta de la vela analizada y señala si la vela está en curso o ya cerró.
-- Los errores de datos activos se muestran al final.
+El BBWP se presenta únicamente como información de volatilidad. No participa en las señales ni modifica los filtros.
 
-### Eliminación de M15
+## Eliminación de M15
 Se ha eliminado M15 del procesamiento:
 - No se descargan velas de 15 minutos.
 - No se calculan indicadores M15.
@@ -24,14 +24,14 @@ Se ha eliminado M15 del procesamiento:
 
 Los registros M15 antiguos que ya existan en `signals_history.jsonl` se conservan; no se borran ni se reescriben. Las claves antiguas M15 que pudieran existir en `state.json` se ignoran.
 
-### Simplificación del código
-- Eliminada la primera implementación antigua que contenía un `main()` duplicado y quedaba sobrescrita por la arquitectura activa.
-- Retiradas funciones de alertas y resúmenes de esa implementación anterior que ya no se utilizaban.
-- Eliminadas las ramas exclusivas de observación M15.
-- Se conserva el flujo activo de BitMan, Koncorde y ML RSI, el estado persistente y el histórico append-only.
+## Simplificación del código
+- Se mantiene la eliminación de la implementación antigua duplicada y de las ramas de observación M15.
+- Se retiran los auxiliares que solo servían para mostrar velas y estado de actualización en el resumen anterior.
+- Se concentra el formato del resumen en funciones pequeñas y específicas.
+- No se han eliminado funciones de cálculo ni de procesamiento que sigan siendo utilizadas.
 
-## Elementos que se mantienen
-- Fórmulas de BitMan, Koncorde, Trend Speed Analyzer, ADX y ML RSI.
+## Elementos que se mantienen sin cambios
+- Fórmulas de BitMan, Koncorde, Trend Speed Analyzer, ADX, BBWP y ML RSI.
 - Filtros, umbrales y condiciones de señal.
 - Temporalidades BitMan/Koncorde H1, H4 y D1; ML RSI H1.
 - Alertas provisionales, sustituciones y resoluciones al cierre.
@@ -40,10 +40,10 @@ Los registros M15 antiguos que ya existan en `signals_history.jsonl` se conserva
 
 ## Validación realizada
 - Compilación Python correcta.
-- Comprobación de que queda una sola función `main()`.
-- Comprobación de que no quedan referencias de ejecución a M15.
-- Comparación de las funciones de cálculo y evaluación: sus cuerpos permanecen idénticos a los del archivo recibido.
-- Prueba simulada del resumen diario: BitMan muestra motivo y valores; Koncorde muestra los tres filtros y su puntuación; no aparece M15.
+- Comprobación de que queda una sola función `main()` y no quedan referencias activas a M15.
+- Prueba simulada del nuevo resumen: precio con formato español, volatilidad BBWP, una línea por temporalidad de Koncorde y ausencia de fecha duplicada, velas y apartado de funcionamiento.
+- No se han modificado las funciones de cálculo de indicadores ni los criterios de evaluación.
+- ZIP comprobado.
 
 No se ha realizado una prueba conectada a Binance ni un envío real a Telegram.
 
