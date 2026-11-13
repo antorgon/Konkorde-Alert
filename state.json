@@ -39,7 +39,7 @@
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "rojo",
-  "ml_rsi_last_closed_candle_1h": "1794538799999",
+  "ml_rsi_last_closed_candle_1h": "1794542399999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -1402,7 +1402,13 @@
     "c4845e38ffe13bc9cd592f6d",
     "49bd5d54480626e260044f38",
     "667c5054060ecebb1c336fff",
-    "108131b4677cc06117fb9397"
+    "108131b4677cc06117fb9397",
+    "03c00986489129c8759b1114",
+    "d732a03fe63987f299e4f7b7",
+    "d54a4effe9678fa8b34808ad",
+    "e6b817f3eceb1ad514150a33",
+    "92623f6ea8e23d4824a3efdc",
+    "826341f64fb01f0601a20adb"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -1631,19 +1637,19 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794542385848,
-  "bitman_last_closed_1h": "1794538799999",
+  "last_cycle_ms": 1794542689424,
+  "bitman_last_closed_1h": "1794542399999",
   "bitman_live_signal_1h": "VENDER",
-  "bitman_live_candle_1h": "1794542399999",
-  "bitman_last_closed_4h": "1794527999999",
+  "bitman_live_candle_1h": "1794545999999",
+  "bitman_last_closed_4h": "1794542399999",
   "bitman_live_signal_4h": "VENDER",
-  "bitman_live_candle_4h": "1794542399999",
+  "bitman_live_candle_4h": "1794556799999",
   "bitman_last_closed_1d": "1794527999999",
   "bitman_live_signal_1d": "VENDER",
   "bitman_live_candle_1d": "1794614399999",
-  "koncorde_last_closed_1h": "1794538799999",
+  "koncorde_last_closed_1h": "1794542399999",
   "koncorde_live_position_1h": "baja",
-  "koncorde_last_closed_4h": "1794527999999",
+  "koncorde_last_closed_4h": "1794542399999",
   "koncorde_live_position_4h": "baja",
   "koncorde_last_closed_1d": "1794527999999",
   "koncorde_live_position_1d": "baja",
@@ -1651,18 +1657,9 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-12",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794542385848,
-  "last_data_ok_4h": 1794542385848,
-  "last_data_ok_1d": 1794542385848,
-  "pending_bitman_4h": {
-    "candle": "1794542399999",
-    "candidate": {
-      "signal": "VENDER",
-      "event_id": "1cf4afb966b6e3fb33ad6fe4",
-      "detected_ms": 1794537226195
-    },
-    "final_filter_count": 3
-  },
+  "last_data_ok_1h": 1794542689424,
+  "last_data_ok_4h": 1794542689424,
+  "last_data_ok_1d": 1794542689424,
   "pending_bitman_1d": {
     "candle": "1794614399999",
     "candidate": {
