@@ -1207,28 +1207,22 @@ def _clear_data_error(state: dict, interval: str):
         })
 
 
-def _hora_vela(row, interval: str, en_curso: bool) -> str:
-    """Describe la vela utilizada, separada de la hora de consulta del bot."""
-    cierre = pd.Timestamp(row["close_time"]).to_pydatetime().astimezone(
-        ZoneInfo("Europe/Madrid")
-    ).strftime("%d/%m %H:%M")
-    return f"en curso (cierre {cierre})" if en_curso else f"última cerrada ({cierre})"
-
-
-def _estado_intervalo(interval: str, market: dict, state: dict) -> tuple[str, str]:
-    """Devuelve el estado de datos y la hora de la última lectura válida."""
-    last_ok = state.get(f"last_data_ok_{interval}")
-    updated = (
-        datetime.fromtimestamp(int(last_ok) / 1000, tz=timezone.utc)
-        .astimezone(ZoneInfo("Europe/Madrid")).strftime("%H:%M:%S")
-        if last_ok else "sin registro"
-    )
-    error = state.get(f"data_error_{interval}")
-    if market.get(interval) is None:
-        if error:
-            return f"⚠️ SIN DATOS VÁLIDOS · {str(error.get('message', 'error'))[:100]}", updated
-        return "⚠️ SIN DATOS EN ESTE CICLO", updated
-    return "", updated
+def _volatilidad_resumen(value) -> str:
+    """Etiqueta informativa del BBWP sin intervenir en las señales."""
+    value = _safe_float(value)
+    if value is None:
+        return "sin dato"
+    if value <= 2:
+        label = "compresión extrema"
+    elif value < 25:
+        label = "baja"
+    elif value < 75:
+        label = "normal"
+    elif value < 98:
+        label = "alta"
+    else:
+        label = "extrema"
+    return f"{label} ({value:.0f}%)"
 
 
 def _bitman_resumen(interval: str, item: dict, state: dict) -> str:
@@ -1236,68 +1230,73 @@ def _bitman_resumen(interval: str, item: dict, state: dict) -> str:
     row = df.iloc[-1]
     previous_row = df.iloc[-2]
     signal = str(row["veredicto"])
-    ao_state = str(row.get("ao_estado") or "sin clasificación")
+    ao_state = str(row.get("ao_estado") or "sin clasificar")
     adx_rising = float(row["adx"]) > float(previous_row["adx"])
     kon_value = float(row["kon_val"])
-    if signal == "COMPRAR":
-        reason = "Condiciones alineadas: AO alcista, ADX subiendo y Koncorde positivo"
-        icon = "🟢"
-    elif signal == "VENDER":
-        reason = "Condiciones alineadas: AO bajista, ADX subiendo y Koncorde negativo"
-        icon = "🔴"
+    previous_kon = float(previous_row["kon_val"])
+
+    if previous_kon <= 0 < kon_value:
+        kon_state = "entra en positivo"
+    elif previous_kon >= 0 > kon_value:
+        kon_state = "sale a negativo"
+    elif kon_value > 0:
+        kon_state = "montaña positiva"
+    elif kon_value < 0:
+        kon_state = "montaña negativa"
     else:
-        reason = motivo_espera({**dict(row), "_adx_subiendo": adx_rising})
-        icon = "⚪"
+        kon_state = "zona neutra"
+
+    if signal == "COMPRAR":
+        reason, icon = "condiciones alineadas", "🟢"
+    elif signal == "VENDER":
+        reason, icon = "condiciones alineadas", "🔴"
+    else:
+        reason, icon = motivo_espera({**dict(row), "_adx_subiendo": adx_rising}), "⚪"
+
     pending = state.get(f"pending_bitman_{interval}", {}).get("candidate")
     if pending:
-        reason += f" · provisional pendiente: {pending.get('signal', 'sin detalle')}"
-    vela = _hora_vela(row, interval, bool(item.get("has_live")))
+        reason += f" · provisional: {pending.get('signal', 'sin detalle')}"
+
     return (
-        f"{interval.upper()}: {icon} <b>{signal}</b> · {reason}\n"
-        f"   AO: {float(row['ao']):.2f} ({ao_state}) · "
-        f"ADX: {float(row['adx']):.1f} ({'subiendo' if adx_rising else 'no sube'}) · "
-        f"Koncorde: {kon_value:.2f} ({'positivo' if kon_value > 0 else 'negativo' if kon_value < 0 else 'neutro'})\n"
-        f"   Vela analizada: {vela}"
+        f"{interval.upper()}: {icon} <b>{signal}</b> · {reason} · "
+        f"AO {ao_state.replace('_', ' ')} · "
+        f"ADX {'subiendo' if adx_rising else 'sin subir'} · "
+        f"Koncorde {kon_state} · Volatilidad {_volatilidad_resumen(row.get('bbwp'))}"
     )
 
 
 def _koncorde_resumen(interval: str, item: dict, state: dict) -> str:
-    df = item["live"]
-    row = df.iloc[-1]
+    row = item["live"].iloc[-1]
     position = "alza" if float(row["verde"]) > float(row["media"]) else "baja"
     c = evaluar_condiciones_koncorde(row, position)
-    value_icon = "✅" if c["valor_ok"] else "❌"
-    tsa_icon = "✅" if c["tsa_ok"] else "❌"
-    adx_icon = "✅" if c["adx_ok"] else "❌"
-    value_label = {
-        "dentro": "dentro del rango",
-        "extendido": "extendido (filtro aceptado)",
-        "contrario": "signo contrario",
+
+    value_text = {
+        "dentro": "valor dentro del rango",
+        "extendido": "valor extendido (filtro aceptado)",
+        "contrario": "valor fuera de dirección",
     }[c["valor_estado"]]
-    tsa_label = "alcista" if c["tsa_bullish"] else "bajista"
-    di_label = "DI+ dominante" if float(row["di_plus"]) > float(row["di_minus"]) else "DI- dominante"
-    candidate = state.get(f"pending_koncorde_{interval}", {}).get("candidate")
-    if candidate:
-        direction = "alcista" if candidate.get("signal") == "alza" else "bajista"
-        pending_text = f" · CANDIDATO PENDIENTE: {direction} {candidate.get('filters', '?')}/3"
-        if candidate.get("invalidated"):
-            pending_text += " (marcado para invalidación al cierre)"
-    else:
-        pending_text = " · Sin candidato provisional pendiente"
-    vela = _hora_vela(row, interval, bool(item.get("has_live")))
-    return (
-        f"{interval.upper()}: <b>posición {position.upper()} · filtros {c['n_ok']}/3</b>{pending_text}\n"
-        f"   Verde: {float(row['verde']):.2f} · Media: {float(row['media']):.2f} · "
-        f"Distancia: {abs(float(row['verde']) - float(row['media'])):.2f}\n"
-        f"   Valor: {value_icon} {value_label} ({c['rango_valor_txt']}) · "
-        f"TSA: {tsa_icon} {tsa_label} · "
-        f"ADX: {adx_icon} {float(row['adx']):.1f}, {di_label}\n"
-        f"   Vela analizada: {vela}"
+    tsa_text = "TSA alcista" if c["tsa_bullish"] else "TSA bajista"
+    di_text = "DI+ dominante" if float(row["di_plus"]) > float(row["di_minus"]) else "DI- dominante"
+    adx_text = f"ADX válido ({di_text})" if c["adx_ok"] else f"ADX no válido ({di_text})"
+    filters = (
+        f"{'✅' if c['valor_ok'] else '❌'} {value_text}, "
+        f"{'✅' if c['tsa_ok'] else '❌'} {tsa_text}, "
+        f"{'✅' if c['adx_ok'] else '❌'} {adx_text}"
     )
 
+    candidate = state.get(f"pending_koncorde_{interval}", {}).get("candidate")
+    pending_text = ""
+    if candidate:
+        direction = "alcista" if candidate.get("signal") == "alza" else "bajista"
+        pending_text = f" · candidato pendiente {direction} ({candidate.get('filters', '?')}/3)"
+        if candidate.get("invalidated"):
+            pending_text += ", pendiente de invalidación al cierre"
 
-def _send_daily_summary(state: dict, now_ms: int, market: dict):
-    """Envía a las 08:00 una fotografía de los estados actuales en español."""
+    return f"{interval.upper()}: <b>{position.upper()} · {c['n_ok']}/3 filtros</b> · {filters}{pending_text}"
+
+
+def _send_daily_summary(state: dict, now_ms: int, market: dict, current_price: float | None):
+    """Envía a las 08:00 una fotografía compacta de los estados actuales."""
     madrid = ZoneInfo("Europe/Madrid")
     now = datetime.fromtimestamp(now_ms / 1000, tz=timezone.utc).astimezone(madrid)
     if now.hour < 8:
@@ -1306,17 +1305,16 @@ def _send_daily_summary(state: dict, now_ms: int, market: dict):
     if state.get("daily_summary_sent") == day_key:
         return
 
+    price_text = (f"{current_price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " USDT") if current_price is not None else "no disponible"
     lines = [
-        f"<b>ESTADO ACTUAL DE LOS SISTEMAS · {SYMBOL}</b>",
-        f"{now.strftime('%d/%m/%Y · %H:%M:%S')} (hora de Madrid)",
+        f"<b>ESTADO ACTUAL · {SYMBOL}</b> · Precio: <b>{price_text}</b>",
         "",
         "<b>BITMAN · ESTADO Y MOTIVO</b>",
     ]
     for interval in BITMAN_INTERVALS:
         item = market.get(interval)
         if item is None:
-            status, updated = _estado_intervalo(interval, market, state)
-            lines.append(f"{interval.upper()}: {status} · Último dato válido: {updated}")
+            lines.append(f"{interval.upper()}: ⚠️ sin datos válidos en este ciclo")
         else:
             lines.append(_bitman_resumen(interval, item, state))
 
@@ -1324,8 +1322,7 @@ def _send_daily_summary(state: dict, now_ms: int, market: dict):
     for interval in KONCORDE_INTERVALS:
         item = market.get(interval)
         if item is None:
-            status, updated = _estado_intervalo(interval, market, state)
-            lines.append(f"{interval.upper()}: {status} · Último dato válido: {updated}")
+            lines.append(f"{interval.upper()}: ⚠️ sin datos válidos en este ciclo")
         else:
             lines.append(_koncorde_resumen(interval, item, state))
 
@@ -1333,37 +1330,16 @@ def _send_daily_summary(state: dict, now_ms: int, market: dict):
     for interval in ML_RSI_INTERVALS:
         item = market.get(interval)
         if item is None or item.get("ml_live") is None or item["ml_live"].empty:
-            status, updated = _estado_intervalo(interval, market, state)
-            lines.append(f"{interval.upper()}: {status} · Último dato válido: {updated}")
+            lines.append(f"{interval.upper()}: ⚠️ sin datos válidos en este ciclo")
             continue
         row = item["ml_live"].iloc[-1]
         signal = str(row.get("ml_señal", "sin clasificación"))
         icon = "🟢" if signal == "verde" else "🔴" if signal == "rojo" else "⚪"
         candidate = state.get(f"pending_ml_rsi_{interval}", {}).get("candidate")
-        suffix = f" · Provisional pendiente: {candidate.get('signal')}" if candidate else ""
-        vela = _hora_vela(row, interval, bool(item.get("has_live")))
-        lines.append(
-            f"{interval.upper()}: {icon} <b>{signal.upper()}</b>{suffix} · "
-            f"RSI: {_safe_float(row.get('ml_rsi')):.1f} · Vela: {vela}"
-            if _safe_float(row.get("ml_rsi")) is not None
-            else f"{interval.upper()}: {icon} <b>{signal.upper()}</b>{suffix} · Vela: {vela}"
-        )
-
-    active_errors = []
-    for interval in sorted(set(BITMAN_INTERVALS + KONCORDE_INTERVALS + ML_RSI_INTERVALS),
-                           key=lambda x: INTERVAL_MS[x]):
-        error = state.get(f"data_error_{interval}")
-        if error:
-            active_errors.append(
-                f"{interval.upper()}: {error.get('count', 0)} ciclos · "
-                f"{str(error.get('message', 'error'))[:100]}"
-            )
-    lines.extend(["", "<b>FUNCIONAMIENTO</b>"])
-    lines.append(f"Último ciclo del bot: {now.strftime('%H:%M:%S')} (Madrid)")
-    if active_errors:
-        lines.append("⚠️ Problemas activos: " + " | ".join(active_errors))
-    else:
-        lines.append("✅ Sin errores de datos activos en este ciclo.")
+        suffix = f" · provisional pendiente: {candidate.get('signal')}" if candidate else ""
+        rsi = _safe_float(row.get("ml_rsi"))
+        rsi_text = f" · RSI {rsi:.1f}" if rsi is not None else ""
+        lines.append(f"{interval.upper()}: {icon} <b>{signal.upper()}</b>{rsi_text}{suffix}")
 
     send_telegram("\n".join(lines))
     state["daily_summary_sent"] = day_key
@@ -1371,7 +1347,7 @@ def _send_daily_summary(state: dict, now_ms: int, market: dict):
         "record_type": "daily_status_snapshot_sent", "event_time_ms": now_ms,
         "day": day_key,
         "snapshot": {"market_intervals": sorted(market.keys()),
-                     "active_data_errors": active_errors},
+                     "price": current_price},
     })
 
 
@@ -1466,7 +1442,7 @@ def main():
 
     if current_price is not None:
         _track_outcomes(state, current_price, now_ms)
-    _send_daily_summary(state, now_ms, market)
+    _send_daily_summary(state, now_ms, market, current_price)
     save_state(state)
 
 
