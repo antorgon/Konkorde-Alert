@@ -2480,3 +2480,4 @@
 {"record_type":"daily_status_snapshot_sent","event_time_ms":1794553319854,"day":"2026-11-13","snapshot":{"market_intervals":["1d","1h","4h"],"active_data_errors":[]}}
 {"record_type":"bot_cycle","event_time_ms":1794553624185}
 {"record_type":"bot_cycle","event_time_ms":1794553927906}
+{"record_type":"bot_cycle","event_time_ms":1794554231309}
