@@ -39,7 +39,7 @@
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "rojo",
-  "ml_rsi_last_closed_candle_1h": "1794635999999",
+  "ml_rsi_last_closed_candle_1h": "1794639599999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -1537,7 +1537,10 @@
     "645139e4d5ec2853cec91478",
     "e4897ebb535ee33027287b7f",
     "e4cd4f8388ccdf54467685cf",
-    "356a9467aa5949a9cfcc5a2b"
+    "356a9467aa5949a9cfcc5a2b",
+    "8ab80c192b302e6cc56d8fd0",
+    "3f34194230980e7a0b2b95f2",
+    "8dd741b27dff51779e216114"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -1766,17 +1769,17 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794639305845,
-  "bitman_last_closed_1h": "1794635999999",
+  "last_cycle_ms": 1794639609277,
+  "bitman_last_closed_1h": "1794639599999",
   "bitman_live_signal_1h": "ESPERAR",
-  "bitman_live_candle_1h": "1794639599999",
+  "bitman_live_candle_1h": "1794643199999",
   "bitman_last_closed_4h": "1794628799999",
   "bitman_live_signal_4h": "VENDER",
   "bitman_live_candle_4h": "1794643199999",
   "bitman_last_closed_1d": "1794614399999",
   "bitman_live_signal_1d": "VENDER",
   "bitman_live_candle_1d": "1794700799999",
-  "koncorde_last_closed_1h": "1794635999999",
+  "koncorde_last_closed_1h": "1794639599999",
   "koncorde_live_position_1h": "baja",
   "koncorde_last_closed_4h": "1794628799999",
   "koncorde_live_position_4h": "baja",
@@ -1784,11 +1787,11 @@
   "koncorde_live_position_1d": "baja",
   "koncorde_last_closed_15m": "1794388499999",
   "koncorde_live_position_15m": "baja",
-  "daily_summary_sent": "2026-11-13",
+  "daily_summary_sent": "2026-11-14",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794639305845,
-  "last_data_ok_4h": 1794639305845,
-  "last_data_ok_1d": 1794639305845,
+  "last_data_ok_1h": 1794639609277,
+  "last_data_ok_4h": 1794639609277,
+  "last_data_ok_1d": 1794639609277,
   "pending_bitman_4h": {
     "candle": "1794643199999",
     "candidate": {
