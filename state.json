@@ -39,7 +39,7 @@
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "rojo",
-  "ml_rsi_last_closed_candle_1h": "1794711599999",
+  "ml_rsi_last_closed_candle_1h": "1794715199999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -1633,7 +1633,12 @@
     "7a12bbd7fd75260160e8c77c",
     "141db69e5ad3c5c9438f0ad7",
     "920ebc55f07d1fb57f86a413",
-    "855bc86cc0e4d9d7a690ae07"
+    "855bc86cc0e4d9d7a690ae07",
+    "1702f14c08e3d23696aec0e0",
+    "7465777a7895d50181b299ed",
+    "c125fcee987b880f8c9eb0dc",
+    "52922aaab47e6cdd47af6849",
+    "07ac5c9d5f72094113eeeb0e"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -1862,19 +1867,19 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794714921937,
-  "bitman_last_closed_1h": "1794711599999",
+  "last_cycle_ms": 1794715225385,
+  "bitman_last_closed_1h": "1794715199999",
   "bitman_live_signal_1h": "ESPERAR",
-  "bitman_live_candle_1h": "1794715199999",
-  "bitman_last_closed_4h": "1794700799999",
+  "bitman_live_candle_1h": "1794718799999",
+  "bitman_last_closed_4h": "1794715199999",
   "bitman_live_signal_4h": "VENDER",
-  "bitman_live_candle_4h": "1794715199999",
+  "bitman_live_candle_4h": "1794729599999",
   "bitman_last_closed_1d": "1794700799999",
   "bitman_live_signal_1d": "VENDER",
   "bitman_live_candle_1d": "1794787199999",
-  "koncorde_last_closed_1h": "1794711599999",
+  "koncorde_last_closed_1h": "1794715199999",
   "koncorde_live_position_1h": "alza",
-  "koncorde_last_closed_4h": "1794700799999",
+  "koncorde_last_closed_4h": "1794715199999",
   "koncorde_live_position_4h": "baja",
   "koncorde_last_closed_1d": "1794700799999",
   "koncorde_live_position_1d": "baja",
@@ -1882,7 +1887,7 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-14",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794714921937,
-  "last_data_ok_4h": 1794714921937,
-  "last_data_ok_1d": 1794714921937
+  "last_data_ok_1h": 1794715225385,
+  "last_data_ok_4h": 1794715225385,
+  "last_data_ok_1d": 1794715225385
 }
