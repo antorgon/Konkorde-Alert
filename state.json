@@ -39,7 +39,7 @@
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "gris",
-  "ml_rsi_last_closed_candle_1h": "1794761999999",
+  "ml_rsi_last_closed_candle_1h": "1794765599999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -1700,7 +1700,11 @@
     "101075932b2626f450c4b2dd",
     "598d98638fc2c22752801c03",
     "36b2741f22a05148b326dac9",
-    "87ceae5ef6737da5dcccfe8e"
+    "87ceae5ef6737da5dcccfe8e",
+    "d04f77553648a13b06fb4520",
+    "298bb4fd4273fa4040976756",
+    "b6168d856a8945637c65fcd9",
+    "e2880e02aa9a8c9e7c5297fe"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -1929,17 +1933,17 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794765323695,
-  "bitman_last_closed_1h": "1794761999999",
+  "last_cycle_ms": 1794765627074,
+  "bitman_last_closed_1h": "1794765599999",
   "bitman_live_signal_1h": "ESPERAR",
-  "bitman_live_candle_1h": "1794765599999",
+  "bitman_live_candle_1h": "1794769199999",
   "bitman_last_closed_4h": "1794758399999",
   "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1794772799999",
   "bitman_last_closed_1d": "1794700799999",
   "bitman_live_signal_1d": "VENDER",
   "bitman_live_candle_1d": "1794787199999",
-  "koncorde_last_closed_1h": "1794761999999",
+  "koncorde_last_closed_1h": "1794765599999",
   "koncorde_live_position_1h": "baja",
   "koncorde_last_closed_4h": "1794758399999",
   "koncorde_live_position_4h": "alza",
@@ -1949,17 +1953,7 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-15",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794765323695,
-  "last_data_ok_4h": 1794765323695,
-  "last_data_ok_1d": 1794765323695,
-  "pending_koncorde_1h": {
-    "candle": "1794765599999",
-    "candidate": {
-      "signal": "baja",
-      "direction": "bajista",
-      "event_id": "598d98638fc2c22752801c03",
-      "filters": 2,
-      "detected_ms": 1794764414728
-    }
-  }
+  "last_data_ok_1h": 1794765627074,
+  "last_data_ok_4h": 1794765627074,
+  "last_data_ok_1d": 1794765627074
 }
