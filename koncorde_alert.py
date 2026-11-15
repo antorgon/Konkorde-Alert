@@ -2,7 +2,7 @@
 Alertas BTCUSDT: BitMan, Koncorde y ML RSI
 =========================================
 El workflow consulta Binance cada cinco minutos y procesa de forma
-independiente H1, H4 y D1 para BitMan/Koncorde y H1 para ML RSI.
+independiente H1, H4, D1 y 1W para BitMan/Koncorde y H1 para ML RSI.
 
 Los cambios detectados en la vela viva se notifican como provisionales y
 se resuelven al cierre. Los candidatos pendientes y los avisos enviados
@@ -603,14 +603,15 @@ STATE_FILE = "state.json"
 HISTORY_FILE = "signals_history.jsonl"
 LOOKBACK = 1000
 
-BITMAN_INTERVALS = ("1h", "4h", "1d")
-KONCORDE_INTERVALS = ("1h", "4h", "1d")
+BITMAN_INTERVALS = ("1h", "4h", "1d", "1w")
+KONCORDE_INTERVALS = ("1h", "4h", "1d", "1w")
 ML_RSI_INTERVALS = ("1h",)
 
 INTERVAL_MS = {
     "1h": 60 * 60 * 1000,
     "4h": 4 * 60 * 60 * 1000,
     "1d": 24 * 60 * 60 * 1000,
+    "1w": 7 * 24 * 60 * 60 * 1000,
 }
 OUTCOME_HORIZONS_MS = {
     "1h": 60 * 60 * 1000,
@@ -788,9 +789,13 @@ def _send_transition(system: str, interval: str, label: str, old: str,
     upper_new = str(new).upper()
     icon = "🟢" if any(x in upper_new for x in ("COMPRAR", "VERDE", "ALZA", "ALCISTA")) else \
            "🔴" if any(x in upper_new for x in ("VENDER", "ROJO", "BAJA", "BAJISTA")) else "⚪"
+    transition_title = (
+        f"CRUCE {str(new).upper()} · {status.upper()}"
+        if system == "koncorde" else f"{status.upper()} · {old} → {icon} {new}"
+    )
     block = (
         f"<b>{label} {SYMBOL} {interval.upper()}</b>\n"
-        f"<b>{status.upper()} · {old} → {icon} {new}</b>\n"
+        f"<b>{transition_title}</b>\n"
         f"Precio: {price:.2f}\n"
         f"Referencia: {_iso_utc(event_ms)}\n"
         f"ID: <code>{_format_event_id(eid)}</code>"
@@ -836,10 +841,17 @@ def _resolve_pending(system: str, interval: str, row, state: dict,
             detail = "El último candidato válido se mantuvo al cierre y conservó al menos 2/3 filtros."
         event_ms = int(pd.Timestamp(row["close_time"]).timestamp() * 1000)
         eid = candidate.get("event_id", "")
+        if system == "koncorde":
+            cross_name = "alcista" if candidate.get("signal") == "alza" else "bajista"
+            outcome_line = f"Cruce {cross_name} {outcome.lower()}"
+        elif system == "bitman":
+            outcome_line = f"Señal {candidate.get('signal', final_signal)} {outcome.lower()}"
+        else:
+            outcome_line = f"Señal {candidate.get('signal', final_signal)} {outcome.lower()}"
         block = (
             f"<b>{system.upper()} {SYMBOL} {interval.upper()}</b>\n"
-            f"<b>{outcome}</b> · ID <code>{_format_event_id(eid)}</code>\n"
-            f"{detail}\nPrecio de cierre: {float(row['close']):.2f}"
+            f"<b>{outcome_line}</b>\n"
+            f"{detail}\nPrecio de cierre: <b>{float(row['close']):.2f}</b>"
         )
         send_telegram(block)
         _record_event(
@@ -923,11 +935,10 @@ def _process_bitman(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFram
             title = "SEÑAL RETIRADA" if old_pending else "CAMBIO DE ESTADO"
             detail = (f"La señal provisional {old_pending.get('signal')} vuelve a ESPERAR."
                       if old_pending else f"El estado {previous} pasa a ESPERAR.")
-            suffix = f" ID <code>{_format_event_id(eid)}</code>" if eid else ""
             send_telegram(
                 f"<b>BITMAN {SYMBOL} {interval.upper()}</b>\n"
-                f"<b>{title}</b> · {previous} → ESPERAR\n{detail}{suffix}\n"
-                f"Precio: {float(row['close']):.2f} · Referencia: {_iso_utc(_utc_now_ms())}"
+                f"<b>{title}</b> · {previous} → ESPERAR\n{detail}\n"
+                f"Precio: <b>{float(row['close']):.2f}</b>"
             )
             _record_event(
                 state, system="bitman", interval=interval, kind=event_kind,
@@ -1044,6 +1055,7 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         if not (old_candidate and old_candidate.get("signal") == pos and not old_candidate.get("invalidated")):
             value_text = f"{c['verde_val']:.1f} {ICONO_VALOR[c['valor_estado']]} ({TEXTO_VALOR[c['valor_estado']]})"
             indicators = {
+                "Posición respecto a la montaña de volumen": _koncorde_posicion_volumen(row),
                 "Valor verde": value_text,
                 "Rango de referencia del valor verde": c["rango_valor_txt"],
                 "Valor verde (dato capturado)": _safe_float(row["verde"]),
@@ -1153,12 +1165,11 @@ def _process_ml_rsi(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFram
             pending = state.get(key, {}).get("candidate")
             eid = pending.get("event_id", "") if pending else ""
             title = "SEÑAL PROVISIONAL RETIRADA" if pending else "CAMBIO DE ESTADO"
-            suffix = f" · ID <code>{_format_event_id(eid)}</code>" if eid else ""
             send_telegram(
                 f"<b>ML RSI {SYMBOL} {interval.upper()}</b>\n"
-                f"<b>{title}</b> · {previous} → GRIS{suffix}\n"
+                f"<b>{title}</b> · {previous} → GRIS\n"
                 f"RSI(27, mínimo, SMA4): {float(row['ml_rsi']):.1f} · "
-                f"Precio: {float(row['close']):.2f}"
+                f"Precio: <b>{float(row['close']):.2f}</b>"
             )
             if pending:
                 state[key]["candidate"] = None
@@ -1265,9 +1276,25 @@ def _bitman_resumen(interval: str, item: dict, state: dict) -> str:
     )
 
 
+def _koncorde_posicion_volumen(row) -> str:
+    """Posición de la línea verde respecto al área marrón (entre cero y marron)."""
+    verde = float(row["verde"])
+    marron = float(row["marron"])
+    limite_inferior = min(0.0, marron)
+    limite_superior = max(0.0, marron)
+    if verde > limite_superior:
+        return "sobre la montaña de volumen"
+    if verde < limite_inferior:
+        return "bajo la montaña de volumen"
+    return "dentro del área de volumen"
+
+
 def _koncorde_resumen(interval: str, item: dict, state: dict) -> str:
     row = item["live"].iloc[-1]
+    # La dirección para evaluar filtros sigue siendo la del lado de la media amarilla;
+    # la posición de volumen es un concepto distinto y se muestra por separado.
     position = "alza" if float(row["verde"]) > float(row["media"]) else "baja"
+    volume_position = _koncorde_posicion_volumen(row)
     c = evaluar_condiciones_koncorde(row, position)
 
     value_text = {
@@ -1292,7 +1319,10 @@ def _koncorde_resumen(interval: str, item: dict, state: dict) -> str:
         if candidate.get("invalidated"):
             pending_text += ", pendiente de invalidación al cierre"
 
-    return f"{interval.upper()}: <b>{position.upper()} · {c['n_ok']}/3 filtros</b> · {filters}{pending_text}"
+    reference_side = "verde sobre la media amarilla" if position == "alza" else "verde bajo la media amarilla"
+    return (f"{interval.upper()}: <b>{volume_position}</b> · "
+            f"Filtros (referencia: {reference_side}, no es un cruce nuevo): "
+            f"{c['n_ok']}/3 · {filters}{pending_text}")
 
 
 def _send_daily_summary(state: dict, now_ms: int, market: dict, current_price: float | None):
@@ -1318,7 +1348,7 @@ def _send_daily_summary(state: dict, now_ms: int, market: dict, current_price: f
         else:
             lines.append(_bitman_resumen(interval, item, state))
 
-    lines.extend(["", "<b>KONCORDE · POSICIÓN Y FILTROS</b>"])
+    lines.extend(["", "<b>KONCORDE · POSICIÓN EN EL ÁREA DE VOLUMEN Y FILTROS</b>"])
     for interval in KONCORDE_INTERVALS:
         item = market.get(interval)
         if item is None:
