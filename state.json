@@ -39,7 +39,7 @@
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "rojo",
-  "ml_rsi_last_closed_candle_1h": "1794725999999",
+  "ml_rsi_last_closed_candle_1h": "1794729599999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -1650,7 +1650,13 @@
     "2b16440475636202af694da2",
     "4a61485c1a202ce9b45a9e86",
     "881454f60a01415e8cb6e806",
-    "e35e45def6d36a73a2c54373"
+    "e35e45def6d36a73a2c54373",
+    "4716db9a075399d8604608a3",
+    "6827876bc94a12cebb70abd9",
+    "f2d132fc2bbf364439768b49",
+    "4c94ac568a3751d769391053",
+    "fe897d8bc0db6fb247fa2634",
+    "9ba6aacb5cb215d84f58e661"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -1879,19 +1885,19 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794729487945,
-  "bitman_last_closed_1h": "1794725999999",
+  "last_cycle_ms": 1794729791366,
+  "bitman_last_closed_1h": "1794729599999",
   "bitman_live_signal_1h": "ESPERAR",
-  "bitman_live_candle_1h": "1794729599999",
-  "bitman_last_closed_4h": "1794715199999",
+  "bitman_live_candle_1h": "1794733199999",
+  "bitman_last_closed_4h": "1794729599999",
   "bitman_live_signal_4h": "VENDER",
-  "bitman_live_candle_4h": "1794729599999",
+  "bitman_live_candle_4h": "1794743999999",
   "bitman_last_closed_1d": "1794700799999",
   "bitman_live_signal_1d": "VENDER",
   "bitman_live_candle_1d": "1794787199999",
-  "koncorde_last_closed_1h": "1794725999999",
+  "koncorde_last_closed_1h": "1794729599999",
   "koncorde_live_position_1h": "baja",
-  "koncorde_last_closed_4h": "1794715199999",
+  "koncorde_last_closed_4h": "1794729599999",
   "koncorde_live_position_4h": "baja",
   "koncorde_last_closed_1d": "1794700799999",
   "koncorde_live_position_1d": "baja",
@@ -1899,17 +1905,7 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-15",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794729487945,
-  "last_data_ok_4h": 1794729487945,
-  "last_data_ok_1d": 1794729487945,
-  "pending_koncorde_1h": {
-    "candle": "1794729599999",
-    "candidate": {
-      "signal": "baja",
-      "direction": "bajista",
-      "event_id": "881454f60a01415e8cb6e806",
-      "filters": 2,
-      "detected_ms": 1794728882453
-    }
-  }
+  "last_data_ok_1h": 1794729791366,
+  "last_data_ok_4h": 1794729791366,
+  "last_data_ok_1d": 1794729791366
 }
