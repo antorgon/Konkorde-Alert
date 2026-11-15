@@ -6,13 +6,13 @@ Este repositorio contiene un bot que consulta datos públicos de Binance para BT
 
 Los sistemas son independientes y trabajan con estas temporalidades:
 
-- **BITMAN**: H1, H4 y D1.
-- **KONCORDE**: H1, H4 y D1.
+- **BITMAN**: H1, H4, D1 y 1W.
+- **KONCORDE**: H1, H4, D1 y 1W.
 - **ML RSI**: H1.
 
 El bot evalúa los cambios intravela en cada ejecución y resuelve los candidatos cuando la vela correspondiente cierra. El workflow repite el ciclo aproximadamente cada cinco minutos durante unas 5 horas y 40 minutos, y después solicita el siguiente ciclo.
 
-> Importante: esta guía describe la versión v5 del script y el workflow incluidos en este paquete. No contiene credenciales. Antes de activar el workflow, comprueba que los secretos y dependencias requeridos están configurados en el repositorio.
+> Importante: esta guía describe la versión v6 del script y el workflow incluidos en este paquete. No contiene credenciales. Antes de activar el workflow, comprueba que los secretos y dependencias requeridos están configurados en el repositorio.
 
 ## 2. Archivos principales
 
@@ -61,8 +61,8 @@ Comprueba que las políticas del repositorio permiten esos permisos y que `GITHU
 
 | Sistema | Temporalidades | Comportamiento |
 |---|---|---|
-| BitMan | H1, H4, D1 | Evalúa COMPRAR, VENDER o ESPERAR y notifica los cambios de estado. |
-| Koncorde | H1, H4, D1 | Detecta cruces de la línea verde respecto a la media amarilla y evalúa tres filtros. |
+| BitMan | H1, H4, D1, 1W | Evalúa COMPRAR, VENDER o ESPERAR y notifica los cambios de estado. |
+| Koncorde | H1, H4, D1, 1W | Detecta cruces de la línea verde respecto a la media amarilla y evalúa tres filtros. |
 | ML RSI | H1 | Clasifica el RSI en verde, rojo o gris y notifica los cambios de color. |
 
 **M15 está eliminado del procesamiento:** no se descargan velas M15, no se calculan indicadores en esa temporalidad y no se generan nuevos eventos M15.
@@ -71,10 +71,18 @@ El script separa las velas cerradas de la vela en curso utilizando el `close_tim
 
 ## 5. Alertas de Koncorde
 
-El cruce se produce cuando la línea verde de Koncorde atraviesa la media amarilla:
+El **evento que dispara la alerta** es exclusivamente el cruce de la línea verde con su media amarilla:
 
-- **Cruce alcista**: la línea verde pasa por encima de la media.
-- **Cruce bajista**: la línea verde pasa por debajo de la media.
+- **Cruce alcista**: la línea verde atraviesa la media amarilla hacia arriba.
+- **Cruce bajista**: la línea verde atraviesa la media amarilla hacia abajo.
+
+La posición de la línea verde respecto al **área marrón de volumen** es una información distinta del cruce. Se clasifica como:
+
+- **Sobre la montaña de volumen**: la línea verde está por encima del límite superior de la montaña.
+- **Bajo la montaña de volumen**: está por debajo del límite inferior.
+- **Dentro del área de volumen**: queda entre cero y el valor de la montaña marrón.
+
+Estar sobre, bajo o dentro del área no genera por sí mismo una alerta. El evento sigue siendo el cruce verde/media amarilla.
 
 Cada cruce se evalúa con tres filtros:
 
@@ -93,12 +101,12 @@ El filtro ADX utiliza un mínimo de **20** y exige DI+ dominante para el cruce a
 ### Estados de los avisos
 
 - **PROVISIONAL**: se detecta un cruce intravela que alcanza al menos 2/3 filtros. Se envía el detalle de los filtros y se guarda el candidato.
-- **CONFIRMADA**: al cierre, el último candidato se mantiene y conserva al menos 2/3 filtros.
+- **CONFIRMADA**: al cierre, el último cruce candidato se mantiene y conserva al menos 2/3 filtros. El mensaje identifica el cruce alcista o bajista confirmado, sin mostrar el ID interno.
 - **NO CONFIRMADA**: el cruce se mantiene al cierre, pero termina con menos de 2/3 filtros.
 - **INVALIDADA**: el cruce provisional desaparece, se invierte o queda reemplazado por otro cruce antes del cierre.
 - **NO VERIFICABLE**: no se puede recuperar la vela exacta del candidato para comprobar su resultado.
 
-Los cruces con **0/3 o 1/3** filtros se registran en el histórico, pero no generan un aviso provisional de Telegram. Un cruce posterior válido puede sustituir al candidato anterior; cada candidato conserva su identificador para asociar correctamente su resolución.
+Los cruces con **0/3 o 1/3** filtros se registran en el histórico, pero no generan un aviso provisional de Telegram. Los IDs se conservan internamente para enlazar candidatos y resoluciones, pero no se muestran en los mensajes de confirmación ni en los cambios de estado. Un cruce posterior válido puede sustituir al candidato anterior; cada candidato conserva su identificador para asociar correctamente su resolución.
 
 ## 6. Filtros de Koncorde: interpretación
 
@@ -110,11 +118,11 @@ El resultado se expresa como `0/3`, `1/3`, `2/3` o `3/3`:
 
 El filtro de valor puede aparecer como **dentro**, **extendido** o **contrario**. La condición extendida se acepta cuando conserva coherencia con la dirección del cruce. Por tanto, “extendido” no equivale necesariamente a filtro fallido.
 
-En el resumen diario se muestra una sola línea por temporalidad con la posición actual, el recuento de filtros y una explicación del estado de cada uno.
+En el resumen diario se muestra por separado la posición de la línea verde respecto al área marrón de volumen, su posición respecto a la media amarilla y la explicación de los tres filtros. La posición no se interpreta como un cruce nuevo. El recuento de filtros del resumen es una lectura contextual según el lado actual de la media amarilla; no significa que se haya producido un nuevo cruce.
 
 ## 7. BitMan e indicador de volatilidad BBWP
 
-BitMan analiza H1, H4 y D1. El veredicto se obtiene cuando se alinean estas condiciones:
+BitMan analiza H1, H4, D1 y 1W. El veredicto se obtiene cuando se alinean estas condiciones:
 
 - **COMPRAR**: AO alcista, ADX subiendo y valor Koncorde positivo.
 - **VENDER**: AO bajista, ADX subiendo y valor Koncorde negativo.
@@ -157,8 +165,8 @@ El script envía una fotografía de los estados actuales una vez al día, en la 
 El mensaje contiene:
 
 - **Cabecera**: precio actual de BTCUSDT.
-- **BitMan H1/H4/D1**: veredicto, motivo, estado del AO, tendencia del ADX, situación de Koncorde y volatilidad BBWP.
-- **Koncorde H1/H4/D1**: posición, puntuación de filtros y explicación individual de los tres filtros; también indica si existe un candidato provisional pendiente.
+- **BitMan H1/H4/D1/1W**: veredicto, motivo, estado del AO, tendencia del ADX, situación de Koncorde y volatilidad BBWP.
+- **Koncorde H1/H4/D1/1W**: posición, puntuación de filtros y explicación individual de los tres filtros; también indica si existe un candidato provisional pendiente.
 - **ML RSI H1**: color y valor RSI; también puede indicar un candidato provisional pendiente.
 
 Se han eliminado del resumen la fecha/hora en una línea independiente, las referencias a velas y cierres, los valores repetidos de los indicadores y el apartado de funcionamiento. Si una temporalidad no tiene datos válidos en ese ciclo, el resumen lo indica en su línea.
@@ -186,7 +194,7 @@ Si no llegan mensajes:
 1. Abre **Actions → ejecución del workflow → logs**.
 2. Comprueba que el workflow se ha ejecutado y que la instalación de dependencias termina correctamente.
 3. Verifica que `requirements.txt` está en la raíz y contiene `pandas`, `numpy` y `requests`.
-4. Comprueba que Binance devuelve velas para H1, H4 y D1.
+4. Comprueba que Binance devuelve velas para H1, H4, D1 y 1W.
 5. Revisa que los secretos `TELEGRAM_TOKEN` y `TELEGRAM_CHAT_ID` existen y corresponden al bot y chat correctos.
 6. Verifica que el bot tiene permiso para escribir en el chat o grupo.
 7. Comprueba `state.json`: el estado guardado puede indicar que una transición ya se notificó o que todavía no hay una nueva transición.
@@ -224,7 +232,7 @@ El `git push` se realiza en un único intento en cada iteración; el YAML actual
 
 ---
 
-**Nota de versión:** este README corresponde al script `koncorde_alert.py` y al workflow `koncorde.yml` incluidos en la revisión v5. Si cambian las temporalidades, secretos, umbrales, filtros, dependencias o comportamiento de las alertas, actualiza también esta documentación.
+**Nota de versión:** este README corresponde al script `koncorde_alert.py` y al workflow `koncorde.yml` incluidos en la revisión v6. Si cambian las temporalidades, secretos, umbrales, filtros, dependencias o comportamiento de las alertas, actualiza también esta documentación.
 
 ## Lista de comprobación antes de activar
 
@@ -236,5 +244,5 @@ El `git push` se realiza en un único intento en cada iteración; el YAML actual
 - [ ] La ejecución manual termina sin errores.
 - [ ] Se reciben los mensajes de Telegram.
 - [ ] Se verifica que los avisos provisionales y sus resoluciones se corresponden.
-- [ ] Solo se procesan BitMan/Koncorde H1, H4, D1 y ML RSI H1; M15 está eliminado.
+- [ ] Solo se procesan BitMan/Koncorde H1, H4, D1, 1W y ML RSI H1; M15 está eliminado.
 - [ ] Se conserva una copia de seguridad de `state.json` y `signals_history.jsonl`.
