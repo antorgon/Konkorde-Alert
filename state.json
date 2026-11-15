@@ -39,7 +39,7 @@
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "rojo",
-  "ml_rsi_last_closed_candle_1h": "1794722399999",
+  "ml_rsi_last_closed_candle_1h": "1794725999999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -1644,7 +1644,10 @@
     "6219df606f151754dc0e3589",
     "2ad869738df05657425f0f36",
     "3af2120ea020a74cb4e6b670",
-    "5e59572780c2192c88061cbf"
+    "5e59572780c2192c88061cbf",
+    "58e4cae575e73287d4b9193f",
+    "0f4d7a60b11f927424c164d2",
+    "2b16440475636202af694da2"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -1873,17 +1876,17 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794725845471,
-  "bitman_last_closed_1h": "1794722399999",
+  "last_cycle_ms": 1794726149204,
+  "bitman_last_closed_1h": "1794725999999",
   "bitman_live_signal_1h": "ESPERAR",
-  "bitman_live_candle_1h": "1794725999999",
+  "bitman_live_candle_1h": "1794729599999",
   "bitman_last_closed_4h": "1794715199999",
   "bitman_live_signal_4h": "VENDER",
   "bitman_live_candle_4h": "1794729599999",
   "bitman_last_closed_1d": "1794700799999",
   "bitman_live_signal_1d": "VENDER",
   "bitman_live_candle_1d": "1794787199999",
-  "koncorde_last_closed_1h": "1794722399999",
+  "koncorde_last_closed_1h": "1794725999999",
   "koncorde_live_position_1h": "alza",
   "koncorde_last_closed_4h": "1794715199999",
   "koncorde_live_position_4h": "baja",
@@ -1891,9 +1894,9 @@
   "koncorde_live_position_1d": "baja",
   "koncorde_last_closed_15m": "1794388499999",
   "koncorde_live_position_15m": "baja",
-  "daily_summary_sent": "2026-11-14",
+  "daily_summary_sent": "2026-11-15",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794725845471,
-  "last_data_ok_4h": 1794725845471,
-  "last_data_ok_1d": 1794725845471
+  "last_data_ok_1h": 1794726149204,
+  "last_data_ok_4h": 1794726149204,
+  "last_data_ok_1d": 1794726149204
 }
