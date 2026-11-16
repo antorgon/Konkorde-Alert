@@ -12,7 +12,7 @@ Los sistemas son independientes y trabajan con estas temporalidades:
 
 El bot evalúa los cambios intravela en cada ejecución y resuelve los candidatos cuando la vela correspondiente cierra. El workflow repite el ciclo aproximadamente cada cinco minutos durante unas 5 horas y 40 minutos, y después solicita el siguiente ciclo.
 
-> Importante: esta guía describe la versión v6 del script y el workflow incluidos en este paquete. No contiene credenciales. Antes de activar el workflow, comprueba que los secretos y dependencias requeridos están configurados en el repositorio.
+> Importante: esta guía corresponde a la revisión modificada del script `koncorde_alert.py`. No contiene credenciales. Antes de activar el workflow, comprueba que los secretos y dependencias requeridos están configurados en el repositorio.
 
 ## 2. Archivos principales
 
@@ -39,7 +39,7 @@ El bot evalúa los cambios intravela en cada ejecución y resuelve los candidato
 
 1. Sube `koncorde_alert.py`, `koncorde.yml` y `README.md` a la raíz del repositorio.
 2. Comprueba que el workflow queda en `.github/workflows/koncorde.yml`.
-3. Asegúrate de que existe `requirements.txt` en la raíz. El workflow ejecuta `pip install -r requirements.txt`; el archivo debe incluir, como mínimo, las librerías importadas por el script: `pandas`, `numpy` y `requests`.
+3. Asegúrate de que existe `requirements.txt` en la raíz. El workflow ejecuta `pip install -r requirements.txt`; el archivo debe incluir, como mínimo, `pandas`, `numpy` y `requests`.
 4. En GitHub, abre **Settings → Secrets and variables → Actions**.
 5. Crea los secretos que utiliza el script:
    - `TELEGRAM_TOKEN`: token del bot de Telegram.
@@ -62,7 +62,7 @@ Comprueba que las políticas del repositorio permiten esos permisos y que `GITHU
 | Sistema | Temporalidades | Comportamiento |
 |---|---|---|
 | BitMan | H1, H4, D1, 1W | Evalúa COMPRAR, VENDER o ESPERAR y notifica los cambios de estado. |
-| Koncorde | H1, H4, D1, 1W | Detecta cruces de la línea verde respecto a la media amarilla y evalúa tres filtros. |
+| Koncorde | H1, H4, D1, 1W | Detecta entradas y salidas de la media amarilla en el área de volumen y evalúa tres filtros complementarios. |
 | ML RSI | H1 | Clasifica el RSI en verde, rojo o gris y notifica los cambios de color. |
 
 **M15 está eliminado del procesamiento:** no se descargan velas M15, no se calculan indicadores en esa temporalidad y no se generan nuevos eventos M15.
@@ -71,42 +71,68 @@ El script separa las velas cerradas de la vela en curso utilizando el `close_tim
 
 ## 5. Alertas de Koncorde
 
-El **evento que dispara la alerta** es exclusivamente el cruce de la línea verde con su media amarilla:
+El **evento que dispara la alerta** es exclusivamente el cambio de posición de la **línea amarilla (media)** respecto al área de montaña de volumen, delimitada por la línea marrón y el nivel cero.
 
-- **Cruce alcista**: la línea verde atraviesa la media amarilla hacia arriba.
-- **Cruce bajista**: la línea verde atraviesa la media amarilla hacia abajo.
+Para cada vela se considera que el área de volumen es el intervalo comprendido entre `0` y `marron`:
 
-La posición de la línea verde respecto al **área marrón de volumen** es una información distinta del cruce. Se clasifica como:
+- Si `marron` es positivo, el área va de cero a marrón.
+- Si `marron` es negativo, el área va de marrón a cero.
 
-- **Sobre la montaña de volumen**: la línea verde está por encima del límite superior de la montaña.
-- **Bajo la montaña de volumen**: está por debajo del límite inferior.
-- **Dentro del área de volumen**: queda entre cero y el valor de la montaña marrón.
+La posición de la media amarilla se clasifica así:
 
-Estar sobre, bajo o dentro del área no genera por sí mismo una alerta. El evento sigue siendo el cruce verde/media amarilla.
+- **Dentro del área de volumen**: la media amarilla está entre los dos límites, incluidos.
+- **Fuera por arriba**: la media amarilla está por encima del límite superior.
+- **Fuera por abajo**: la media amarilla está por debajo del límite inferior.
 
-Cada cruce se evalúa con tres filtros:
+Los eventos son:
+
+- **Entrada desde arriba**: la media amarilla pasa de estar fuera por arriba a estar dentro del área.
+- **Entrada desde abajo**: la media amarilla pasa de estar fuera por abajo a estar dentro del área.
+- **Salida por arriba**: la media amarilla pasa de estar dentro del área a quedar fuera por arriba.
+- **Salida por abajo**: la media amarilla pasa de estar dentro del área a quedar fuera por abajo.
+
+Permanecer dentro o fuera no genera nuevos avisos. Tampoco se considera un evento nuevo pasar de fuera por arriba a fuera por abajo sin una transición observada por el interior del área. Al iniciar el seguimiento se establece una línea base sin emitir una alerta inicial.
+
+Si la línea marrón cambia de signo entre lecturas, el script actualiza la referencia de posición sin generar una entrada o salida en ese ciclo. Esta protección evita atribuir a la media un evento artificial causado por la inversión del lado de la montaña.
+
+La línea verde **no dispara el evento** y el cruce verde/media amarilla **no es el disparador** de las alertas de esta revisión.
+
+### Tres filtros complementarios
+
+Cada entrada o salida detectada se evalúa con los tres filtros existentes. Los filtros complementan el evento, pero no lo generan:
 
 1. **Valor de la línea verde**: comprueba si el valor está dentro del rango de referencia, extendido pero todavía aceptado, o en dirección contraria.
-2. **Trend Speed Analyzer (TSA)**: comprueba que la dirección del TSA acompañe al cruce.
-3. **ADX y DI**: exige ADX igual o superior al umbral configurado y que DI+ o DI− domine en la dirección del cruce.
+2. **Trend Speed Analyzer (TSA)**: comprueba que la dirección del TSA acompañe a la dirección asignada al evento.
+3. **ADX y DI**: exige ADX igual o superior al umbral configurado y que DI+ o DI− domine en la dirección asignada al evento.
 
-Los rangos implementados para el filtro del valor verde son:
+Los rangos implementados para el filtro del valor verde se mantienen:
 
-- Cruce alcista: dentro del rango entre **25 y 50**; los valores extendidos no negativos también se aceptan.
-- Cruce bajista: dentro del rango **≤ -25**; los valores extendidos no positivos también se aceptan.
-- Un valor con signo contrario a la dirección del cruce no supera este filtro.
+- Dirección `alza`: dentro del rango entre **25 y 50**; los valores extendidos no negativos también se aceptan.
+- Dirección `baja`: dentro del rango **≤ -25**; los valores extendidos no positivos también se aceptan.
+- Un valor con signo contrario a la dirección no supera este filtro.
 
-El filtro ADX utiliza un mínimo de **20** y exige DI+ dominante para el cruce alcista o DI− dominante para el bajista. Estos valores corresponden a las constantes actuales del script.
+El filtro ADX utiliza un mínimo de **20** y exige DI+ dominante para dirección `alza` o DI− dominante para dirección `baja`.
+
+Para aplicar los filtros sin alterar sus fórmulas ni umbrales, la dirección complementaria se asigna según el sentido del evento:
+
+| Evento de la media amarilla | Dirección usada por los filtros |
+|---|---|
+| Entrada desde arriba | Baja |
+| Entrada desde abajo | Alza |
+| Salida por arriba | Alza |
+| Salida por abajo | Baja |
+
+Esta dirección solo determina cómo se evalúan los filtros ya existentes. No cambia qué elemento genera el evento: siempre es la media amarilla entrando o saliendo del área de volumen.
 
 ### Estados de los avisos
 
-- **PROVISIONAL**: se detecta un cruce intravela que alcanza al menos 2/3 filtros. Se envía el detalle de los filtros y se guarda el candidato.
-- **CONFIRMADA**: al cierre, el último cruce candidato se mantiene y conserva al menos 2/3 filtros. El mensaje identifica el cruce alcista o bajista confirmado, sin mostrar el ID interno.
-- **NO CONFIRMADA**: el cruce se mantiene al cierre, pero termina con menos de 2/3 filtros.
-- **INVALIDADA**: el cruce provisional desaparece, se invierte o queda reemplazado por otro cruce antes del cierre.
+- **PROVISIONAL**: se detecta una entrada o salida intravela que alcanza al menos 2/3 filtros. Se envía el detalle y se guarda el candidato.
+- **CONFIRMADA**: al cierre, la media amarilla conserva la posición objetivo del evento y el candidato mantiene al menos 2/3 filtros.
+- **NO CONFIRMADA**: el evento se mantiene al cierre, pero termina con menos de 2/3 filtros.
+- **INVALIDADA**: la transición provisional se revierte antes del cierre o la media amarilla no termina en la posición esperada.
 - **NO VERIFICABLE**: no se puede recuperar la vela exacta del candidato para comprobar su resultado.
 
-Los cruces con **0/3 o 1/3** filtros se registran en el histórico, pero no generan un aviso provisional de Telegram. Los IDs se conservan internamente para enlazar candidatos y resoluciones, pero no se muestran en los mensajes de confirmación ni en los cambios de estado. Un cruce posterior válido puede sustituir al candidato anterior; cada candidato conserva su identificador para asociar correctamente su resolución.
+Los eventos con **0/3 o 1/3** filtros se registran en el histórico, pero no generan un aviso provisional de Telegram. Los IDs se conservan internamente para enlazar candidatos y resoluciones; no se muestran en los mensajes de Koncorde.
 
 ## 6. Filtros de Koncorde: interpretación
 
@@ -116,9 +142,9 @@ El resultado se expresa como `0/3`, `1/3`, `2/3` o `3/3`:
 - `2/3`: dos filtros son favorables; alcanza el umbral para enviar el aviso provisional.
 - `1/3` o `0/3`: no alcanza el umbral de aviso provisional; el evento queda registrado en el histórico.
 
-El filtro de valor puede aparecer como **dentro**, **extendido** o **contrario**. La condición extendida se acepta cuando conserva coherencia con la dirección del cruce. Por tanto, “extendido” no equivale necesariamente a filtro fallido.
+El filtro de valor puede aparecer como **dentro**, **extendido** o **contrario**. La condición extendida se acepta cuando conserva coherencia con la dirección asignada al evento. Por tanto, “extendido” no equivale necesariamente a filtro fallido.
 
-En el resumen diario se muestra por separado la posición de la línea verde respecto al área marrón de volumen, su posición respecto a la media amarilla y la explicación de los tres filtros. La posición no se interpreta como un cruce nuevo. El recuento de filtros del resumen es una lectura contextual según el lado actual de la media amarilla; no significa que se haya producido un nuevo cruce.
+En el resumen diario se muestra la posición actual de la **media amarilla** respecto al área de volumen y la explicación de los tres filtros. El recuento es una lectura contextual; no significa que se haya producido un evento nuevo. La referencia direccional usada para evaluar filtros se indica como `alza` o `baja`.
 
 ## 7. BitMan e indicador de volatilidad BBWP
 
@@ -166,10 +192,10 @@ El mensaje contiene:
 
 - **Cabecera**: precio actual de BTCUSDT.
 - **BitMan H1/H4/D1/1W**: veredicto, motivo, estado del AO, tendencia del ADX, situación de Koncorde y volatilidad BBWP.
-- **Koncorde H1/H4/D1/1W**: posición, puntuación de filtros y explicación individual de los tres filtros; también indica si existe un candidato provisional pendiente.
+- **Koncorde H1/H4/D1/1W**: posición de la media amarilla respecto a la montaña, puntuación de filtros y explicación individual de los tres filtros; también indica si existe un candidato provisional pendiente.
 - **ML RSI H1**: color y valor RSI; también puede indicar un candidato provisional pendiente.
 
-Se han eliminado del resumen la fecha/hora en una línea independiente, las referencias a velas y cierres, los valores repetidos de los indicadores y el apartado de funcionamiento. Si una temporalidad no tiene datos válidos en ese ciclo, el resumen lo indica en su línea.
+Si una temporalidad no tiene datos válidos en ese ciclo, el resumen lo indica en su línea.
 
 El workflow tiene un inicio programado diario a las **04:13 UTC** y realiza ciclos de cinco minutos durante aproximadamente 5 horas y 40 minutos. La hora local de envío del resumen depende de cuándo se ejecute el ciclo que alcanza o supera las 08:00 en Madrid.
 
@@ -182,6 +208,8 @@ El workflow tiene un inicio programado diario a las **04:13 UTC** y realiza cicl
 - El bot añade también registros de ciclo, interrupciones, errores/recuperaciones de datos y seguimiento de resultados cuando corresponde.
 
 El seguimiento de resultados registra el rendimiento observado a 1, 3, 6, 12 y 24 horas para los eventos incluidos en el seguimiento. Estos datos son observaciones históricas, no una garantía de resultados futuros.
+
+La nueva detección de Koncorde utiliza claves de estado propias (`koncorde_live_volume_position_*` y `koncorde_live_marron_sign_*`). Así, los valores guardados por la lógica anterior de verde/media no se interpretan como posiciones de la media amarilla respecto al área de volumen. En la primera ejecución tras actualizar, se establece una nueva línea base sin emitir una alerta inicial. Las demás claves y los registros históricos no se reinician ni se reescriben.
 
 No borres estos archivos durante el funcionamiento normal: hacerlo puede reiniciar el seguimiento, provocar avisos repetidos o perder continuidad histórica. Antes de actualizar o reiniciar el bot, haz una copia de seguridad de ambos.
 
@@ -199,6 +227,7 @@ Si no llegan mensajes:
 6. Verifica que el bot tiene permiso para escribir en el chat o grupo.
 7. Comprueba `state.json`: el estado guardado puede indicar que una transición ya se notificó o que todavía no hay una nueva transición.
 8. Recuerda que Koncorde solo envía provisionales con al menos 2/3 filtros; los eventos 0/3 y 1/3 quedan registrados sin aviso de Telegram.
+9. En la primera ejecución tras esta actualización, Koncorde establece la nueva referencia de posición de la media amarilla sin enviar un aviso inicial.
 
 Si el workflow no puede guardar el estado, revisa los permisos de escritura, las reglas de protección de la rama y los mensajes de `git pull`, `git commit` y `git push` en los logs.
 
@@ -232,7 +261,7 @@ El `git push` se realiza en un único intento en cada iteración; el YAML actual
 
 ---
 
-**Nota de versión:** este README corresponde al script `koncorde_alert.py` y al workflow `koncorde.yml` incluidos en la revisión v6. Si cambian las temporalidades, secretos, umbrales, filtros, dependencias o comportamiento de las alertas, actualiza también esta documentación.
+**Nota de versión:** este README documenta la revisión modificada del script `koncorde_alert.py`. El cambio funcional de esta revisión afecta al disparador de Koncorde: la media amarilla entra o sale del área entre cero y marrón. BitMan, ML RSI, las temporalidades y el workflow se mantienen sin cambios.
 
 ## Lista de comprobación antes de activar
 
@@ -243,6 +272,6 @@ El `git push` se realiza en un único intento en cada iteración; el YAML actual
 - [ ] El workflow tiene permisos para guardar el estado y relanzarse.
 - [ ] La ejecución manual termina sin errores.
 - [ ] Se reciben los mensajes de Telegram.
-- [ ] Se verifica que los avisos provisionales y sus resoluciones se corresponden.
+- [ ] Se verifica que las entradas/salidas provisionales y sus resoluciones se corresponden.
 - [ ] Solo se procesan BitMan/Koncorde H1, H4, D1, 1W y ML RSI H1; M15 está eliminado.
 - [ ] Se conserva una copia de seguridad de `state.json` y `signals_history.jsonl`.
