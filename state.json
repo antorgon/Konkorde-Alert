@@ -1920,7 +1920,9 @@
     "7942ef45c2f2992d529b9b8b",
     "41bd678bd11655242a38fb06",
     "4067f1245cc7999097a99452",
-    "fc6f9f4855b99652fd243117"
+    "fc6f9f4855b99652fd243117",
+    "14df85cb9a8cd2cf87eaebc6",
+    "0d1f03872d652137bc39b758"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2149,7 +2151,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794927612680,
+  "last_cycle_ms": 1794927917109,
   "bitman_last_closed_1h": "1794927599999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1794931199999",
@@ -2157,7 +2159,7 @@
   "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1794931199999",
   "bitman_last_closed_1d": "1794873599999",
-  "bitman_live_signal_1d": "ESPERAR",
+  "bitman_live_signal_1d": "VENDER",
   "bitman_live_candle_1d": "1794959999999",
   "koncorde_last_closed_1h": "1794927599999",
   "koncorde_live_position_1h": "alza",
@@ -2169,10 +2171,10 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-17",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794927612680,
-  "last_data_ok_4h": 1794927612680,
-  "last_data_ok_1d": 1794927612680,
-  "last_data_ok_1w": 1794927612680,
+  "last_data_ok_1h": 1794927917109,
+  "last_data_ok_4h": 1794927917109,
+  "last_data_ok_1d": 1794927917109,
+  "last_data_ok_1w": 1794927917109,
   "bitman_last_closed_1w": "1794787199999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795391999999",
@@ -2188,7 +2190,11 @@
   "koncorde_live_marron_sign_1w": 1,
   "pending_bitman_1d": {
     "candle": "1794959999999",
-    "candidate": null,
+    "candidate": {
+      "signal": "VENDER",
+      "event_id": "14df85cb9a8cd2cf87eaebc6",
+      "detected_ms": 1794927919644
+    },
     "final_filter_count": 3
   },
   "koncorde_live_green_volume_position_1h": "fuera_arriba",
@@ -2196,7 +2202,7 @@
   "koncorde_live_green_volume_position_4h": "dentro",
   "koncorde_live_green_marron_sign_4h": 1,
   "koncorde_live_green_volume_position_1d": "fuera_abajo",
-  "koncorde_live_green_marron_sign_1d": 1,
+  "koncorde_live_green_marron_sign_1d": -1,
   "koncorde_live_green_volume_position_1w": "dentro",
   "koncorde_live_green_marron_sign_1w": 1
 }
