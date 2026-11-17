@@ -4207,3 +4207,4 @@
 {"record_type":"bot_cycle","event_time_ms":1794926090607}
 {"record_type":"bot_cycle","event_time_ms":1794926394390}
 {"record_type":"signal","event_id":"5e7f14aa10a87c12952fd911","symbol":"BTCUSDT","system":"bitman","interval":"1d","kind":"signal_withdrawn","signal":"ESPERAR","status":"withdrawn","event_time_ms":1794926396799,"event_time_utc":"2026-11-17T14:39:56.799000+00:00","detected_time_ms":1794926396799,"sent_time_ms":1794926396799,"candle_time_ms":null,"price":65266.2,"telegram_sent":true,"indicators":{"source_event_id":"7c2b267c8085cb38785da014"}}
+{"record_type":"bot_cycle","event_time_ms":1794926699040}
