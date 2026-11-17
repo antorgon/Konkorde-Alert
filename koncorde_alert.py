@@ -794,14 +794,14 @@ def _send_transition(system: str, interval: str, label: str, old: str,
         if system == "koncorde" else f"{status.upper()} · {old} → {icon} {new}"
     )
     block = (
-        f"<b>{label} {SYMBOL} {interval.upper()}</b>\\n"
-        f"<b>{transition_title}</b>\\n"
+        f"<b>{label} {SYMBOL} {interval.upper()}</b>\n"
+        f"<b>{transition_title}</b>\n"
         f"Precio: {price:.2f}"
     )
     if system not in ("bitman", "koncorde"):
         block += (
-            f"\\nReferencia: {_iso_utc(event_ms)}"
-            f"\\nID: <code>{_format_event_id(eid)}</code>"
+            f"\nReferencia: {_iso_utc(event_ms)}"
+            f"\nID: <code>{_format_event_id(eid)}</code>"
         )
     if indicators:
         block += "\n" + "\n".join(
@@ -965,7 +965,7 @@ def _process_bitman(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFram
                 "AO estado": str(row.get("ao_estado")),
                 "Koncorde": _safe_float(row.get("kon_val")),
                 "ADX": _safe_float(row.get("adx")),
-                "BBWP": (f"{_safe_float(row.get('bbwp')):.1f} · {bbwp_texto(row.get('bbwp'))}"
+                "BBWP": (bbwp_texto(row.get("bbwp")).replace("BBWP: ", "", 1)
                          if _safe_float(row.get("bbwp")) is not None else None),
             }
             eid = _send_transition(
