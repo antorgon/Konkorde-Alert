@@ -1925,7 +1925,10 @@
     "0d1f03872d652137bc39b758",
     "8810cadcba8562fccdc6991d",
     "70b66dc4390511857f43d80a",
-    "3a362ef11537d5aa1f6b5c8b"
+    "3a362ef11537d5aa1f6b5c8b",
+    "3967e760d51dbd72b6f8320e",
+    "d89c5a441ecd1a4cd3ff2e1b",
+    "921c59024dcaa1fd076dc89a"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2154,9 +2157,9 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794930349722,
+  "last_cycle_ms": 1794930671654,
   "bitman_last_closed_1h": "1794927599999",
-  "bitman_live_signal_1h": "ESPERAR",
+  "bitman_live_signal_1h": "COMPRAR",
   "bitman_live_candle_1h": "1794931199999",
   "bitman_last_closed_4h": "1794916799999",
   "bitman_live_signal_4h": "ESPERAR",
@@ -2174,10 +2177,10 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-17",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794930349722,
-  "last_data_ok_4h": 1794930349722,
-  "last_data_ok_1d": 1794930349722,
-  "last_data_ok_1w": 1794930349722,
+  "last_data_ok_1h": 1794930671654,
+  "last_data_ok_4h": 1794930671654,
+  "last_data_ok_1d": 1794930671654,
+  "last_data_ok_1w": 1794930671654,
   "bitman_last_closed_1w": "1794787199999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795391999999",
@@ -2200,12 +2203,21 @@
     },
     "final_filter_count": 3
   },
-  "koncorde_live_green_volume_position_1h": "fuera_arriba",
+  "koncorde_live_green_volume_position_1h": "dentro",
   "koncorde_live_green_marron_sign_1h": 1,
   "koncorde_live_green_volume_position_4h": "dentro",
   "koncorde_live_green_marron_sign_4h": 1,
   "koncorde_live_green_volume_position_1d": "fuera_abajo",
   "koncorde_live_green_marron_sign_1d": -1,
   "koncorde_live_green_volume_position_1w": "dentro",
-  "koncorde_live_green_marron_sign_1w": 1
+  "koncorde_live_green_marron_sign_1w": 1,
+  "pending_bitman_1h": {
+    "candle": "1794931199999",
+    "candidate": {
+      "signal": "COMPRAR",
+      "event_id": "3967e760d51dbd72b6f8320e",
+      "detected_ms": 1794930673876
+    },
+    "final_filter_count": 3
+  }
 }
