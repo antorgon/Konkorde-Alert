@@ -794,12 +794,15 @@ def _send_transition(system: str, interval: str, label: str, old: str,
         if system == "koncorde" else f"{status.upper()} · {old} → {icon} {new}"
     )
     block = (
-        f"<b>{label} {SYMBOL} {interval.upper()}</b>\n"
-        f"<b>{transition_title}</b>\n"
-        f"Precio: {price:.2f}\n"
-        f"Referencia: {_iso_utc(event_ms)}\n"
-        f"ID: <code>{_format_event_id(eid)}</code>"
+        f"<b>{label} {SYMBOL} {interval.upper()}</b>\\n"
+        f"<b>{transition_title}</b>\\n"
+        f"Precio: {price:.2f}"
     )
+    if system not in ("bitman", "koncorde"):
+        block += (
+            f"\\nReferencia: {_iso_utc(event_ms)}"
+            f"\\nID: <code>{_format_event_id(eid)}</code>"
+        )
     if indicators:
         block += "\n" + "\n".join(
             f"{k}: {v:.2f}" if isinstance(v, (float, np.floating)) else f"{k}: {v}"
@@ -827,18 +830,24 @@ def _resolve_pending(system: str, interval: str, row, state: dict,
     if candidate:
         if candidate.get("invalidated") or (valid and final_signal != candidate.get("signal")):
             outcome = "INVALIDADA"
-            detail = ("El evento provisional se revirtió antes del cierre o la media amarilla "
-                      "no terminó en la posición esperada.")
+            detail = ("El evento provisional se revirtió antes del cierre o la línea verde "
+                      "no terminó en la posición esperada." if system == "koncorde" else
+                      "La señal provisional dejó de cumplirse antes del cierre.")
         elif not valid:
             outcome = "NO VERIFICABLE"
             detail = ("No se pudo recuperar la vela exacta del candidato; "
                       "no es posible determinar si se mantuvo al cierre.")
         elif int(final_filter_count) < 2:
             outcome = "NO CONFIRMADA"
-            detail = "El evento se mantuvo, pero terminó con menos de 2/3 filtros válidos."
+            detail = ("La transición se mantuvo, pero terminó con menos de 2/3 filtros válidos."
+                      if system == "koncorde" else
+                      "La señal no conservó las condiciones necesarias al cierre.")
         else:
             outcome = "CONFIRMADA"
-            detail = "La posición de la media amarilla se mantuvo al cierre y conservó al menos 2/3 filtros."
+            detail = ("La línea verde mantuvo su posición al cierre y conservó al menos 2/3 filtros."
+                      if system == "koncorde" else
+                      "La señal se mantuvo al cierre." if system == "bitman" else
+                      "El estado se mantuvo al cierre.")
         event_ms = int(pd.Timestamp(row["close_time"]).timestamp() * 1000)
         eid = candidate.get("event_id", "")
         if system == "koncorde":
@@ -984,16 +993,16 @@ def _process_bitman(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFram
 
 def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFrame,
                       state: dict):
-    """Detecta entradas/salidas de la media amarilla en el área entre cero y marrón."""
+    """Detecta entradas/salidas de la línea verde en el área entre cero y marrón."""
     if len(df_live) < 3:
         return
 
     row = df_live.iloc[-1]
     candle = _candle_id(row)
     key = f"pending_koncorde_{interval}"
-    # Clave nueva: no reinterpretar el antiguo estado verde/media del v6.
-    pos_key = f"koncorde_live_volume_position_{interval}"
-    sign_key = f"koncorde_live_marron_sign_{interval}"
+    # Claves nuevas: no reutilizar la referencia antigua basada en media amarilla.
+    pos_key = f"koncorde_live_green_volume_position_{interval}"
+    sign_key = f"koncorde_live_green_marron_sign_{interval}"
 
     current_position = _koncorde_estado_volumen(row)
     current_sign = _koncorde_signo_marron(row["marron"])
@@ -1029,8 +1038,8 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
                 status="closed",
                 indicators={
                     **_indicators_for_history(closed_row),
-                    "media_volume_position": _koncorde_posicion_volumen(closed_row),
-                    "media_inside_volume_area": closed_position == "dentro",
+                    "green_volume_position": _koncorde_posicion_volumen(closed_row),
+                    "green_inside_volume_area": closed_position == "dentro",
                 },
                 telegram_sent=False,
             )
@@ -1043,14 +1052,13 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         state[pos_key] = current_position
         state[sign_key] = current_sign
         print(
-            f"[KONCORDE {interval}] Línea base de media amarilla: "
+            f"[KONCORDE {interval}] Línea base de línea verde: "
             f"{current_position}; sin aviso inicial."
         )
         return
 
     # Si marrón atraviesa cero, la montaña invierte de lado. Se actualiza la
-    # referencia sin atribuir a la media un cruce que puede deberse al cambio
-    # de orientación/colapso del área.
+    # referencia sin atribuir a la línea verde un evento artificial.
     if previous_sign is not None and current_sign != previous_sign:
         state[pos_key] = current_position
         state[sign_key] = current_sign
@@ -1073,12 +1081,12 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         event_type = "entrada"
         side = "desde arriba" if previous_position == "fuera_arriba" else "desde abajo"
         direction = "baja" if previous_position == "fuera_arriba" else "alza"
-        event_label = f"ENTRADA EN MONTAÑA {side.upper()}"
+        event_label = f"ENTRADA EN ÁREA DE VOLUMEN {side.upper()}"
     else:
         event_type = "salida"
         side = "por arriba" if current_position == "fuera_arriba" else "por abajo"
         direction = "alza" if current_position == "fuera_arriba" else "baja"
-        event_label = f"SALIDA DE MONTAÑA {side.upper()}"
+        event_label = f"SALIDA DEL ÁREA DE VOLUMEN {side.upper()}"
 
     c = evaluar_condiciones_koncorde(row, direction)
     n_ok = int(c["n_ok"])
@@ -1100,7 +1108,7 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
             **_indicators_for_history(row),
             "event": event_type,
             "side": side,
-            "media_volume_position": _koncorde_posicion_volumen(row),
+            "green_volume_position": _koncorde_posicion_volumen(row),
             "filters": filters,
         },
         telegram_sent=False,
@@ -1131,11 +1139,10 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         )
         indicators = {
             "Evento": event_label,
-            "Media amarilla respecto a montaña": _koncorde_posicion_volumen(row),
+            "Línea verde respecto al área de volumen": _koncorde_posicion_volumen(row),
             "Valor verde": value_text,
             "Rango de referencia del valor verde": c["rango_valor_txt"],
             "Valor verde (dato capturado)": _safe_float(row["verde"]),
-            "Media amarilla (dato capturado)": _safe_float(row["media"]),
             "Trend Speed Analyzer": (
                 f"{'alcista' if c['tsa_bullish'] else 'bajista'} "
                 f"{'✅' if c['tsa_ok'] else '❌'}"
@@ -1336,15 +1343,15 @@ def _bitman_resumen(interval: str, item: dict, state: dict) -> str:
     previous_kon = float(previous_row["kon_val"])
 
     if previous_kon <= 0 < kon_value:
-        kon_state = "entra en positivo"
+        kon_state = "valor Koncorde cruza a positivo"
     elif previous_kon >= 0 > kon_value:
-        kon_state = "sale a negativo"
+        kon_state = "valor Koncorde cruza a negativo"
     elif kon_value > 0:
-        kon_state = "montaña positiva"
+        kon_state = "valor Koncorde positivo"
     elif kon_value < 0:
-        kon_state = "montaña negativa"
+        kon_state = "valor Koncorde negativo"
     else:
-        kon_state = "zona neutra"
+        kon_state = "valor Koncorde neutro"
 
     if signal == "COMPRAR":
         reason, icon = "condiciones alineadas", "🟢"
@@ -1352,6 +1359,8 @@ def _bitman_resumen(interval: str, item: dict, state: dict) -> str:
         reason, icon = "condiciones alineadas", "🔴"
     else:
         reason, icon = motivo_espera({**dict(row), "_adx_subiendo": adx_rising}), "⚪"
+        if not adx_rising:
+            reason = "Sin impulso"
 
     pending = state.get(f"pending_bitman_{interval}", {}).get("candidate")
     if pending:
@@ -1361,38 +1370,40 @@ def _bitman_resumen(interval: str, item: dict, state: dict) -> str:
         f"{interval.upper()}: {icon} <b>{signal}</b> · {reason} · "
         f"AO {ao_state.replace('_', ' ')} · "
         f"ADX {'subiendo' if adx_rising else 'sin subir'} · "
-        f"Koncorde {kon_state} · Volatilidad {_volatilidad_resumen(row.get('bbwp'))}"
+        f"{kon_state} · Volatilidad {_volatilidad_resumen(row.get('bbwp'))}"
     )
 
 
+
 def _koncorde_posicion_volumen(row) -> str:
-    """Posición de la media amarilla respecto al área entre cero y marrón."""
-    media = float(row["media"])
+    """Posición de la línea verde respecto al área entre cero y marrón."""
+    verde = float(row["verde"])
     marron = float(row["marron"])
+    if not np.isfinite(verde) or not np.isfinite(marron):
+        raise ValueError("Línea verde o marrón no finitas en Koncorde")
     limite_inferior = min(0.0, marron)
     limite_superior = max(0.0, marron)
-    if media > limite_superior:
+    if verde > limite_superior:
         return "fuera por arriba"
-    if media < limite_inferior:
+    if verde < limite_inferior:
         return "fuera por abajo"
     return "dentro del área de volumen"
 
 
 def _koncorde_estado_volumen(row) -> str:
-    """Estado geométrico de la media amarilla: dentro, fuera arriba o fuera abajo."""
-    media = float(row["media"])
+    """Estado geométrico de la línea verde: dentro, fuera arriba o fuera abajo."""
+    verde = float(row["verde"])
     marron = float(row["marron"])
-    if not np.isfinite(media) or not np.isfinite(marron):
-        raise ValueError("Media o marrón no finitos en Koncorde")
+    if not np.isfinite(verde) or not np.isfinite(marron):
+        raise ValueError("Línea verde o marrón no finitas en Koncorde")
     inferior = min(0.0, marron)
     superior = max(0.0, marron)
-    if inferior <= media <= superior:
+    if inferior <= verde <= superior:
         return "dentro"
-    return "fuera_arriba" if media > superior else "fuera_abajo"
+    return "fuera_arriba" if verde > superior else "fuera_abajo"
 
 
-def _koncorde_signo_marron(value: float) -> int:
-    """Signo de marrón para detectar inversiones de la montaña."""
+def _koncorde_signo_marron(value) -> int:
     value = float(value)
     return 1 if value > 0 else -1 if value < 0 else 0
 
@@ -1402,15 +1413,14 @@ def _koncorde_resumen(interval: str, item: dict, state: dict) -> str:
     volume_position = _koncorde_posicion_volumen(row)
     volume_state = _koncorde_estado_volumen(row)
 
-    # Los filtros conservan intactos sus criterios. Para la fotografía actual
-    # se usa la posición de la media respecto al área: fuera arriba = alza;
-    # fuera abajo = baja. Dentro, se toma el lado de la media frente a cero.
+    # La dirección contextual para mostrar los filtros sigue los criterios
+    # existentes; dentro del área se toma el signo de la propia línea verde.
     if volume_state == "fuera_arriba":
         filter_direction = "alza"
     elif volume_state == "fuera_abajo":
         filter_direction = "baja"
     else:
-        filter_direction = "alza" if float(row["media"]) >= 0 else "baja"
+        filter_direction = "alza" if float(row["verde"]) >= 0 else "baja"
 
     c = evaluar_condiciones_koncorde(row, filter_direction)
     value_text = {
@@ -1432,14 +1442,15 @@ def _koncorde_resumen(interval: str, item: dict, state: dict) -> str:
     if candidate:
         event = str(candidate.get("event", "evento"))
         side = str(candidate.get("side", ""))
-        pending_text = f" · {event} {side} provisional ({candidate.get('filters', '?')}/3 filtros)"
+        pending_text = f" · pendiente: {event} {side} ({candidate.get('filters', '?')}/3 filtros)"
         if candidate.get("invalidated"):
-            pending_text += ", pendiente de resolución al cierre"
+            pending_text += " · pendiente de resolución al cierre"
 
     return (
-        f"{interval.upper()}: <b>Media amarilla {volume_position}</b> · "
+        f"{interval.upper()}: <b>Línea verde {volume_position}</b> · "
         f"Filtros ({filter_direction}): {c['n_ok']}/3 · {filters}{pending_text}"
     )
+
 
 
 def _send_daily_summary(state: dict, now_ms: int, market: dict, current_price: float | None):
