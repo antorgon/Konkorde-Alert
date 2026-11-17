@@ -1878,7 +1878,9 @@
     "07b9fe61c031084813d892c7",
     "c568921bab70bde9d848e3fe",
     "20bad3e1391b718b7999af63",
-    "259343611c1e265593f7ae73"
+    "259343611c1e265593f7ae73",
+    "7c2b267c8085cb38785da014",
+    "0c17f87aa48442403cb1139d"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2107,7 +2109,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1794894753077,
+  "last_cycle_ms": 1794895057070,
   "bitman_last_closed_1h": "1794891599999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1794895199999",
@@ -2115,7 +2117,7 @@
   "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1794902399999",
   "bitman_last_closed_1d": "1794873599999",
-  "bitman_live_signal_1d": "ESPERAR",
+  "bitman_live_signal_1d": "VENDER",
   "bitman_live_candle_1d": "1794959999999",
   "koncorde_last_closed_1h": "1794891599999",
   "koncorde_live_position_1h": "alza",
@@ -2127,10 +2129,10 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-16",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1794894753077,
-  "last_data_ok_4h": 1794894753077,
-  "last_data_ok_1d": 1794894753077,
-  "last_data_ok_1w": 1794894753077,
+  "last_data_ok_1h": 1794895057070,
+  "last_data_ok_4h": 1794895057070,
+  "last_data_ok_1d": 1794895057070,
+  "last_data_ok_1w": 1794895057070,
   "bitman_last_closed_1w": "1794787199999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795391999999",
@@ -2141,12 +2143,16 @@
   "koncorde_live_volume_position_4h": "dentro",
   "koncorde_live_marron_sign_4h": 1,
   "koncorde_live_volume_position_1d": "fuera_arriba",
-  "koncorde_live_marron_sign_1d": 1,
+  "koncorde_live_marron_sign_1d": -1,
   "koncorde_live_volume_position_1w": "fuera_arriba",
   "koncorde_live_marron_sign_1w": 1,
   "pending_bitman_1d": {
     "candle": "1794959999999",
-    "candidate": null,
+    "candidate": {
+      "signal": "VENDER",
+      "event_id": "7c2b267c8085cb38785da014",
+      "detected_ms": 1794895059834
+    },
     "final_filter_count": 3
   }
 }
