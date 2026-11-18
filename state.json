@@ -2065,7 +2065,9 @@
     "fe1285d772bf76be72cd3d63",
     "08965cdb4961fa117297621f",
     "bba0c2093199e2f4e28ece04",
-    "424eee6306404db73d5d33f9"
+    "424eee6306404db73d5d33f9",
+    "4bfb044921005578cc6ca340",
+    "6cd631e2a6dfae6f16e1b5f2"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2294,9 +2296,9 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795030340600,
+  "last_cycle_ms": 1795030643769,
   "bitman_last_closed_1h": "1795028399999",
-  "bitman_live_signal_1h": "ESPERAR",
+  "bitman_live_signal_1h": "VENDER",
   "bitman_live_candle_1h": "1795031999999",
   "bitman_last_closed_4h": "1795017599999",
   "bitman_live_signal_4h": "ESPERAR",
@@ -2314,17 +2316,17 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-18",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795030340600,
-  "last_data_ok_4h": 1795030340600,
-  "last_data_ok_1d": 1795030340600,
-  "last_data_ok_1w": 1795030340600,
+  "last_data_ok_1h": 1795030643769,
+  "last_data_ok_4h": 1795030643769,
+  "last_data_ok_1d": 1795030643769,
+  "last_data_ok_1w": 1795030643769,
   "bitman_last_closed_1w": "1794787199999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795391999999",
   "koncorde_last_closed_1w": "1794787199999",
   "koncorde_live_position_1w": "baja",
   "koncorde_live_volume_position_1h": "fuera_arriba",
-  "koncorde_live_marron_sign_1h": 1,
+  "koncorde_live_marron_sign_1h": -1,
   "koncorde_live_volume_position_4h": "fuera_arriba",
   "koncorde_live_marron_sign_4h": -1,
   "koncorde_live_volume_position_1d": "fuera_arriba",
@@ -2338,5 +2340,14 @@
   "koncorde_live_green_volume_position_1d": "fuera_abajo",
   "koncorde_live_green_marron_sign_1d": -1,
   "koncorde_live_green_volume_position_1w": "dentro",
-  "koncorde_live_green_marron_sign_1w": 1
+  "koncorde_live_green_marron_sign_1w": 1,
+  "pending_bitman_1h": {
+    "candle": "1795031999999",
+    "candidate": {
+      "signal": "VENDER",
+      "event_id": "4bfb044921005578cc6ca340",
+      "detected_ms": 1795030645868
+    },
+    "final_filter_count": 3
+  }
 }
