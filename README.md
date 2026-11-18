@@ -12,7 +12,7 @@ Los sistemas son independientes y trabajan con estas temporalidades:
 
 El bot evalúa los cambios intravela en cada ejecución y resuelve los candidatos cuando la vela correspondiente cierra. El workflow repite el ciclo aproximadamente cada cinco minutos durante unas 5 horas y 40 minutos, y después solicita el siguiente ciclo.
 
-> Importante: esta guía corresponde a la revisión modificada del script `koncorde_alert.py`. No contiene credenciales. Antes de activar el workflow, comprueba que los secretos y dependencias requeridos están configurados en el repositorio.
+> Importante: esta guía corresponde a la revisión corregida del script `koncorde_alert.py`. No contiene credenciales. Antes de activar el workflow, comprueba que los secretos y dependencias requeridos están configurados en el repositorio.
 
 ## 2. Archivos principales
 
@@ -84,7 +84,7 @@ La posición de la línea verde se clasifica así:
 - **Fuera por arriba**: la línea verde está por encima del límite superior.
 - **Fuera por abajo**: la línea verde está por debajo del límite inferior.
 
-Los eventos son:
+La clasificación geométrica usa siempre ambos límites: `min(0, marron)` y `max(0, marron)`. Cruzar el nivel cero por sí solo no constituye una entrada o salida, salvo que ese cruce también cambie la posición de la línea verde respecto al intervalo completo. Los mensajes visibles indican únicamente entrada, salida o posición dentro/fuera; el lado de procedencia se conserva internamente para evaluar los filtros.\n\nLos eventos son:
 
 - **Entrada desde arriba**: la línea verde pasa de estar fuera por arriba a estar dentro del área.
 - **Entrada desde abajo**: la línea verde pasa de estar fuera por abajo a estar dentro del área.
@@ -132,7 +132,7 @@ Esta dirección solo determina cómo se evalúan los filtros ya existentes. No c
 - **INVALIDADA**: la transición provisional se revierte antes del cierre o la línea verde no termina en la posición esperada.
 - **NO VERIFICABLE**: no se puede recuperar la vela exacta del candidato para comprobar su resultado.
 
-Los eventos con **0/3 o 1/3** filtros se registran en el histórico, pero no generan un aviso provisional de Telegram. Los IDs se conservan internamente para enlazar candidatos y resoluciones; no se muestran en los mensajes de Koncorde.
+Los eventos con **0/3 o 1/3** filtros se registran en el histórico, pero no generan un aviso provisional de Telegram. Los IDs se conservan internamente para enlazar candidatos y resoluciones; no se muestran en los mensajes de BitMan, Koncorde ni ML RSI. Los mensajes provisionales muestran el precio en negrita. En ML RSI se muestra el valor RSI, pero no la referencia, el ID ni los umbrales dinámicos.
 
 ## 6. Filtros de Koncorde: interpretación
 
@@ -277,3 +277,15 @@ El `git push` se realiza en un único intento en cada iteración; el YAML actual
 - [ ] Se verifica que las entradas/salidas provisionales y sus resoluciones se corresponden.
 - [ ] Solo se procesan BitMan/Koncorde H1, H4, D1, 1W y ML RSI H1; M15 está eliminado.
 - [ ] Se conserva una copia de seguridad de `state.json` y `signals_history.jsonl`.
+
+
+## Corrección de la detección de eventos Koncorde
+
+La entrada o salida del área de volumen se determina exclusivamente con la **línea amarilla (media)** respecto al intervalo delimitado por cero y la línea marrón. La línea verde no genera estos eventos y se conserva únicamente en el filtro de valor verde y en los cálculos de filtros existentes.
+
+- Área de volumen: entre `min(0, marron)` y `max(0, marron)`, incluidos ambos límites.
+- Entrada: la línea amarilla pasa de fuera a dentro.
+- Salida: la línea amarilla pasa de dentro a fuera, indicando si sale por arriba o por abajo.
+- El cálculo se aplica tanto a los eventos provisionales como a la resolución de la vela cerrada.
+- Se mantienen los tres filtros (valor verde, TSA y ADX/DI), sus fórmulas y umbrales, y la protección ante cambios de signo de la línea marrón.
+- Se reutilizan las claves persistentes `koncorde_live_volume_position_*` y `koncorde_live_marron_sign_*`; no es necesario reiniciar ni modificar `state.json` o `signals_history.jsonl`.
