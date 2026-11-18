@@ -2039,7 +2039,9 @@
     "94c72b89f376016e31d790ee",
     "0a6672ae630877b83502ad8a",
     "a98d59a1dae05b298da90cd3",
-    "5d7375bc2c25ce973118f179"
+    "5d7375bc2c25ce973118f179",
+    "372d701ed82e7d0c5b66c447",
+    "b25786d7fe441c74ad7c05bd"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2268,9 +2270,9 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795016679253,
+  "last_cycle_ms": 1795016982456,
   "bitman_last_closed_1h": "1795013999999",
-  "bitman_live_signal_1h": "ESPERAR",
+  "bitman_live_signal_1h": "VENDER",
   "bitman_live_candle_1h": "1795017599999",
   "bitman_last_closed_4h": "1795003199999",
   "bitman_live_signal_4h": "ESPERAR",
@@ -2288,10 +2290,10 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-18",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795016679253,
-  "last_data_ok_4h": 1795016679253,
-  "last_data_ok_1d": 1795016679253,
-  "last_data_ok_1w": 1795016679253,
+  "last_data_ok_1h": 1795016982456,
+  "last_data_ok_4h": 1795016982456,
+  "last_data_ok_1d": 1795016982456,
+  "last_data_ok_1w": 1795016982456,
   "bitman_last_closed_1w": "1794787199999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795391999999",
@@ -2306,7 +2308,7 @@
   "koncorde_live_volume_position_1w": "fuera_arriba",
   "koncorde_live_marron_sign_1w": 1,
   "koncorde_live_green_volume_position_1h": "fuera_abajo",
-  "koncorde_live_green_marron_sign_1h": 1,
+  "koncorde_live_green_marron_sign_1h": -1,
   "koncorde_live_green_volume_position_4h": "dentro",
   "koncorde_live_green_marron_sign_4h": 1,
   "koncorde_live_green_volume_position_1d": "fuera_abajo",
@@ -2324,5 +2326,14 @@
       "filters": 2,
       "detected_ms": 1795014555422
     }
+  },
+  "pending_bitman_1h": {
+    "candle": "1795017599999",
+    "candidate": {
+      "signal": "VENDER",
+      "event_id": "372d701ed82e7d0c5b66c447",
+      "detected_ms": 1795016984420
+    },
+    "final_filter_count": 3
   }
 }

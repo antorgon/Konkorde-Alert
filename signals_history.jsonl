@@ -4630,3 +4630,6 @@
 {"record_type":"bot_cycle","event_time_ms":1795016072306}
 {"record_type":"bot_cycle","event_time_ms":1795016375920}
 {"record_type":"bot_cycle","event_time_ms":1795016679253}
+{"record_type":"bot_cycle","event_time_ms":1795016982456}
+{"record_type":"signal","event_id":"372d701ed82e7d0c5b66c447","symbol":"BTCUSDT","system":"bitman","interval":"1h","kind":"intrabar_transition","signal":"VENDER","status":"provisional","event_time_ms":1795016983792,"event_time_utc":"2026-11-18T15:49:43.792000+00:00","detected_time_ms":1795016983792,"sent_time_ms":null,"candle_time_ms":1795017599999,"price":63074.43,"telegram_sent":false,"indicators":{"AO":-493.51250000000437,"AO estado":"bajista","Koncorde":-17.143053053245865,"ADX":13.360439995607114,"BBWP":"70% (media -- volatilidad normal)"}}
+{"record_type":"signal","event_id":"b25786d7fe441c74ad7c05bd","symbol":"BTCUSDT","system":"bitman","interval":"1h","kind":"telegram_sent","signal":"VENDER:372d701ed82e7d0c5b66c447","status":"provisional","event_time_ms":1795016983792,"event_time_utc":"2026-11-18T15:49:43.792000+00:00","detected_time_ms":1795016984419,"sent_time_ms":1795016984419,"candle_time_ms":null,"price":63074.43,"telegram_sent":true,"indicators":{"source_event_id":"372d701ed82e7d0c5b66c447"}}
