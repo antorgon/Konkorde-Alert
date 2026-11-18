@@ -2023,7 +2023,13 @@
     "58032ed406cd56ed4d493f60",
     "70d11666c78a73ae54bb126f",
     "9887dc2cbc633c1c9d60a060",
-    "5825eac0f792a4b6dfb36e41"
+    "5825eac0f792a4b6dfb36e41",
+    "51719b20e48aac70b2d9a6f8",
+    "bcc93fc3e8dca50c5e7df3c1",
+    "fe81add92aa8aa27da2f8b30",
+    "8e9504826f62759b90a35c4c",
+    "b44e39bcc6c8134189c215f8",
+    "0e0d87c951027c023cf47560"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2252,7 +2258,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795012404181,
+  "last_cycle_ms": 1795012707723,
   "bitman_last_closed_1h": "1795010399999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1795013999999",
@@ -2272,10 +2278,10 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-18",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795012404181,
-  "last_data_ok_4h": 1795012404181,
-  "last_data_ok_1d": 1795012404181,
-  "last_data_ok_1w": 1795012404181,
+  "last_data_ok_1h": 1795012707723,
+  "last_data_ok_4h": 1795012707723,
+  "last_data_ok_1d": 1795012707723,
+  "last_data_ok_1w": 1795012707723,
   "bitman_last_closed_1w": "1794787199999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795391999999",
@@ -2289,12 +2295,36 @@
   "koncorde_live_marron_sign_1d": -1,
   "koncorde_live_volume_position_1w": "fuera_arriba",
   "koncorde_live_marron_sign_1w": 1,
-  "koncorde_live_green_volume_position_1h": "dentro",
+  "koncorde_live_green_volume_position_1h": "fuera_abajo",
   "koncorde_live_green_marron_sign_1h": 1,
-  "koncorde_live_green_volume_position_4h": "fuera_arriba",
+  "koncorde_live_green_volume_position_4h": "dentro",
   "koncorde_live_green_marron_sign_4h": 1,
   "koncorde_live_green_volume_position_1d": "fuera_abajo",
   "koncorde_live_green_marron_sign_1d": -1,
   "koncorde_live_green_volume_position_1w": "dentro",
-  "koncorde_live_green_marron_sign_1w": 1
+  "koncorde_live_green_marron_sign_1w": 1,
+  "pending_koncorde_1h": {
+    "candle": "1795013999999",
+    "candidate": {
+      "signal": "fuera_abajo",
+      "event": "salida",
+      "side": "por abajo",
+      "direction": "baja",
+      "event_id": "bcc93fc3e8dca50c5e7df3c1",
+      "filters": 2,
+      "detected_ms": 1795012709409
+    }
+  },
+  "pending_koncorde_4h": {
+    "candle": "1795017599999",
+    "candidate": {
+      "signal": "dentro",
+      "event": "entrada",
+      "side": "desde arriba",
+      "direction": "baja",
+      "event_id": "b44e39bcc6c8134189c215f8",
+      "filters": 2,
+      "detected_ms": 1795012709931
+    }
+  }
 }
