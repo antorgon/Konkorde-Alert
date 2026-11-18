@@ -4490,3 +4490,5 @@
 {"record_type":"bot_cycle","event_time_ms":1794987786713}
 {"record_type":"bot_cycle","event_time_ms":1794988089922}
 {"record_type":"bot_cycle","event_time_ms":1794988393097}
+{"record_type":"bot_cycle","event_time_ms":1794988696223}
+{"record_type":"signal","event_id":"a2af94bda57a65c733813087","symbol":"BTCUSDT","system":"koncorde","interval":"1h","kind":"intrabar_salida","signal":"salida_por_arriba","status":"weak","event_time_ms":1794988697618,"event_time_utc":"2026-11-18T07:58:17.618000+00:00","detected_time_ms":1794988697618,"sent_time_ms":null,"candle_time_ms":null,"price":64893.98,"telegram_sent":false,"indicators":{"close":64893.98,"verde":90.41064653572592,"marron":89.65084337851054,"media":60.3169625759025,"tsa_bullish":false,"adx":11.747122257963651,"di_plus":22.751789171329104,"di_minus":17.400229932360205,"ao":5.651441176472872,"ao_estado":"alcista","kon_val":90.41064653572592,"bbwp":48.41269841269841,"event":"salida","side":"por arriba","green_volume_position":"fuera por arriba","filters":{"value_ok":true,"tsa_ok":false,"adx_ok":false,"n_ok":1,"value_state":"extendido"}}}
