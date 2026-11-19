@@ -39,7 +39,7 @@
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
   "ml_rsi_live_signal_1h": "rojo",
-  "ml_rsi_last_closed_candle_1h": "1795125599999",
+  "ml_rsi_last_closed_candle_1h": "1795129199999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -2219,7 +2219,11 @@
     "2bafccaef4e7bf7d29c7518a",
     "a302158fa38a28205d2605c0",
     "95368cc79d4509ea31ac4c6e",
-    "fd8baeb936684d3357340bce"
+    "fd8baeb936684d3357340bce",
+    "7f1db72a9608f6e8f1d75b53",
+    "4df9707d67d95172551978d8",
+    "72714e5f5ab6c1a5ed179fa8",
+    "64380e2b34f83184d2fccc00"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2448,17 +2452,17 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795129181983,
-  "bitman_last_closed_1h": "1795125599999",
+  "last_cycle_ms": 1795129485586,
+  "bitman_last_closed_1h": "1795129199999",
   "bitman_live_signal_1h": "ESPERAR",
-  "bitman_live_candle_1h": "1795129199999",
+  "bitman_live_candle_1h": "1795132799999",
   "bitman_last_closed_4h": "1795118399999",
   "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1795132799999",
   "bitman_last_closed_1d": "1795046399999",
   "bitman_live_signal_1d": "VENDER",
   "bitman_live_candle_1d": "1795132799999",
-  "koncorde_last_closed_1h": "1795125599999",
+  "koncorde_last_closed_1h": "1795129199999",
   "koncorde_live_position_1h": "alza",
   "koncorde_last_closed_4h": "1795118399999",
   "koncorde_live_position_4h": "alza",
@@ -2468,10 +2472,10 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-19",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795129181983,
-  "last_data_ok_4h": 1795129181983,
-  "last_data_ok_1d": 1795129181983,
-  "last_data_ok_1w": 1795129181983,
+  "last_data_ok_1h": 1795129485586,
+  "last_data_ok_4h": 1795129485586,
+  "last_data_ok_1d": 1795129485586,
+  "last_data_ok_1w": 1795129485586,
   "bitman_last_closed_1w": "1794787199999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795391999999",
@@ -2500,19 +2504,6 @@
       "event_id": "c7858e8db886e1c47498cd1f",
       "detected_ms": 1795118547716
     },
-    "final_filter_count": 3
-  },
-  "pending_ml_rsi_1h": {
-    "candle": "1795129199999",
-    "candidate": {
-      "signal": "rojo",
-      "event_id": "3327c734885f7f602bbe48f0",
-      "detected_ms": 1795125840194
-    }
-  },
-  "pending_bitman_1h": {
-    "candle": "1795129199999",
-    "candidate": null,
     "final_filter_count": 3
   }
 }
