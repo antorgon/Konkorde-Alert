@@ -2127,7 +2127,8 @@
     "aa65cf1c2c3488ce65fd516a",
     "f367d03b0278cdecd482a0bf",
     "379f389bd70954dd8fe49f7b",
-    "2a043612a9395ef29e546e9f"
+    "2a043612a9395ef29e546e9f",
+    "b77aabab6d2356b397f2ffc7"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2356,12 +2357,12 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795058631331,
+  "last_cycle_ms": 1795058934817,
   "bitman_last_closed_1h": "1795057199999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1795060799999",
   "bitman_last_closed_4h": "1795046399999",
-  "bitman_live_signal_4h": "VENDER",
+  "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1795060799999",
   "bitman_last_closed_1d": "1795046399999",
   "bitman_live_signal_1d": "VENDER",
@@ -2376,10 +2377,10 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-18",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795058631331,
-  "last_data_ok_4h": 1795058631331,
-  "last_data_ok_1d": 1795058631331,
-  "last_data_ok_1w": 1795058631331,
+  "last_data_ok_1h": 1795058934817,
+  "last_data_ok_4h": 1795058934817,
+  "last_data_ok_1d": 1795058934817,
+  "last_data_ok_1w": 1795058934817,
   "bitman_last_closed_1w": "1794787199999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795391999999",
@@ -2388,7 +2389,7 @@
   "koncorde_live_volume_position_1h": "dentro",
   "koncorde_live_marron_sign_1h": 1,
   "koncorde_live_volume_position_4h": "fuera_arriba",
-  "koncorde_live_marron_sign_4h": -1,
+  "koncorde_live_marron_sign_4h": 1,
   "koncorde_live_volume_position_1d": "fuera_arriba",
   "koncorde_live_marron_sign_1d": -1,
   "koncorde_live_volume_position_1w": "fuera_arriba",
@@ -2403,11 +2404,7 @@
   "koncorde_live_green_marron_sign_1w": 1,
   "pending_bitman_4h": {
     "candle": "1795060799999",
-    "candidate": {
-      "signal": "VENDER",
-      "event_id": "506b98a29410c51c24e0e305",
-      "detected_ms": 1795051932138
-    },
+    "candidate": null,
     "final_filter_count": 3
   }
 }
