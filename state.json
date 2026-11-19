@@ -2113,7 +2113,8 @@
     "9b9a2330a4bd8dbbf462dd8a",
     "2799000ee1b4b2659034d20a",
     "9433636601f4d34676c4dbc4",
-    "e994ffb0ad979f84ffbfa4b5"
+    "e994ffb0ad979f84ffbfa4b5",
+    "13b76d68cf0fe41333d702aa"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2342,12 +2343,12 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795048285471,
+  "last_cycle_ms": 1795048589563,
   "bitman_last_closed_1h": "1795046399999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1795049999999",
   "bitman_last_closed_4h": "1795046399999",
-  "bitman_live_signal_4h": "VENDER",
+  "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1795060799999",
   "bitman_last_closed_1d": "1795046399999",
   "bitman_live_signal_1d": "VENDER",
@@ -2362,10 +2363,10 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-18",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795048285471,
-  "last_data_ok_4h": 1795048285471,
-  "last_data_ok_1d": 1795048285471,
-  "last_data_ok_1w": 1795048285471,
+  "last_data_ok_1h": 1795048589563,
+  "last_data_ok_4h": 1795048589563,
+  "last_data_ok_1d": 1795048589563,
+  "last_data_ok_1w": 1795048589563,
   "bitman_last_closed_1w": "1794787199999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795391999999",
@@ -2374,7 +2375,7 @@
   "koncorde_live_volume_position_1h": "dentro",
   "koncorde_live_marron_sign_1h": 1,
   "koncorde_live_volume_position_4h": "fuera_arriba",
-  "koncorde_live_marron_sign_4h": -1,
+  "koncorde_live_marron_sign_4h": 1,
   "koncorde_live_volume_position_1d": "fuera_arriba",
   "koncorde_live_marron_sign_1d": -1,
   "koncorde_live_volume_position_1w": "fuera_arriba",
@@ -2401,11 +2402,7 @@
   },
   "pending_bitman_4h": {
     "candle": "1795060799999",
-    "candidate": {
-      "signal": "VENDER",
-      "event_id": "51e0fec5bf6604b8f1ca5489",
-      "detected_ms": 1795046769003
-    },
+    "candidate": null,
     "final_filter_count": 3
   }
 }
