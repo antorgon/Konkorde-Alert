@@ -2182,7 +2182,10 @@
     "edbfd4032eea155a9b81ef38",
     "d3c62e03e6eba26c33809109",
     "41165fc925686d70ba11d63e",
-    "24e6f02c202dca694f41447a"
+    "24e6f02c202dca694f41447a",
+    "60d10aab1e823857c618cf9b",
+    "e97124c9e001a1fd32511720",
+    "e0c89e2bec5adaccbf24941a"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2411,7 +2414,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795106370349,
+  "last_cycle_ms": 1795106673819,
   "bitman_last_closed_1h": "1795103999999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1795107599999",
@@ -2431,10 +2434,10 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-19",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795106370349,
-  "last_data_ok_4h": 1795106370349,
-  "last_data_ok_1d": 1795106370349,
-  "last_data_ok_1w": 1795106370349,
+  "last_data_ok_1h": 1795106673819,
+  "last_data_ok_4h": 1795106673819,
+  "last_data_ok_1d": 1795106673819,
+  "last_data_ok_1w": 1795106673819,
   "bitman_last_closed_1w": "1794787199999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795391999999",
@@ -2442,7 +2445,7 @@
   "koncorde_live_position_1w": "baja",
   "koncorde_live_volume_position_1h": "fuera_arriba",
   "koncorde_live_marron_sign_1h": 1,
-  "koncorde_live_volume_position_4h": "fuera_arriba",
+  "koncorde_live_volume_position_4h": "dentro",
   "koncorde_live_marron_sign_4h": 1,
   "koncorde_live_volume_position_1d": "fuera_arriba",
   "koncorde_live_marron_sign_1d": -1,
@@ -2455,5 +2458,17 @@
   "koncorde_live_green_volume_position_1d": "fuera_abajo",
   "koncorde_live_green_marron_sign_1d": -1,
   "koncorde_live_green_volume_position_1w": "dentro",
-  "koncorde_live_green_marron_sign_1w": 1
+  "koncorde_live_green_marron_sign_1w": 1,
+  "pending_koncorde_4h": {
+    "candle": "1795118399999",
+    "candidate": {
+      "signal": "dentro",
+      "event": "entrada",
+      "side": "desde arriba",
+      "direction": "baja",
+      "event_id": "e97124c9e001a1fd32511720",
+      "filters": 2,
+      "detected_ms": 1795106675514
+    }
+  }
 }
