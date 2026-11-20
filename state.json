@@ -38,8 +38,8 @@
   "koncorde_last_position_1d": "baja",
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
-  "ml_rsi_live_signal_1h": "rojo",
-  "ml_rsi_last_closed_candle_1h": "1795139999999",
+  "ml_rsi_live_signal_1h": "gris",
+  "ml_rsi_last_closed_candle_1h": "1795143599999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
     "7eb501fa103fcd46ab01d7f5",
@@ -2244,7 +2244,11 @@
     "24e0de11f1aefc1f7a0ef51d",
     "9b4a733b00182c57965e5d02",
     "d27d6205ba3b4ccbbe971248",
-    "a0148070c5fdcbf14d766aa1"
+    "a0148070c5fdcbf14d766aa1",
+    "a48504ec18c07e4e1bea4d92",
+    "2fc4051b1739f52ec591f550",
+    "eb17581f3bb7495ca69975f1",
+    "45de6a55d727cbd64b24d026"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2473,17 +2477,17 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795143474301,
-  "bitman_last_closed_1h": "1795139999999",
+  "last_cycle_ms": 1795143778351,
+  "bitman_last_closed_1h": "1795143599999",
   "bitman_live_signal_1h": "ESPERAR",
-  "bitman_live_candle_1h": "1795143599999",
+  "bitman_live_candle_1h": "1795147199999",
   "bitman_last_closed_4h": "1795132799999",
   "bitman_live_signal_4h": "ESPERAR",
   "bitman_live_candle_4h": "1795147199999",
   "bitman_last_closed_1d": "1795132799999",
   "bitman_live_signal_1d": "ESPERAR",
   "bitman_live_candle_1d": "1795219199999",
-  "koncorde_last_closed_1h": "1795139999999",
+  "koncorde_last_closed_1h": "1795143599999",
   "koncorde_live_position_1h": "alza",
   "koncorde_last_closed_4h": "1795132799999",
   "koncorde_live_position_4h": "alza",
@@ -2493,10 +2497,10 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-19",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795143474301,
-  "last_data_ok_4h": 1795143474301,
-  "last_data_ok_1d": 1795143474301,
-  "last_data_ok_1w": 1795143474301,
+  "last_data_ok_1h": 1795143778351,
+  "last_data_ok_4h": 1795143778351,
+  "last_data_ok_1d": 1795143778351,
+  "last_data_ok_1w": 1795143778351,
   "bitman_last_closed_1w": "1794787199999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795391999999",
@@ -2529,10 +2533,5 @@
       "filters": 3,
       "detected_ms": 1795132830301
     }
-  },
-  "pending_bitman_1h": {
-    "candle": "1795143599999",
-    "candidate": null,
-    "final_filter_count": 3
   }
 }
