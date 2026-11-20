@@ -62,89 +62,52 @@ Comprueba que las políticas del repositorio permiten esos permisos y que `GITHU
 | Sistema | Temporalidades | Comportamiento |
 |---|---|---|
 | BitMan | H1, H4, D1, 1W | Evalúa COMPRAR, VENDER o ESPERAR y notifica los cambios de estado. |
-| Koncorde | H1, H4, D1, 1W | Detecta entradas y salidas de la línea verde en el área de volumen y evalúa tres filtros complementarios. |
+| Koncorde | H1, H4, D1, 1W | Detecta entradas y salidas de la línea amarilla (media) en el área delimitada por cero y la línea marrón. |
 | ML RSI | H1 | Clasifica el RSI en verde, rojo o gris y notifica los cambios de color. |
 
-**M15 está eliminado del procesamiento:** no se descargan velas M15, no se calculan indicadores en esa temporalidad y no se generan nuevos eventos M15.
+Esta revisión de TradingView es la variante **sin filtros de Koncorde**: no aplica los filtros de valor verde, TSA ni ADX/DI para decidir si se produce una alerta. Esos indicadores pueden seguir apareciendo como información, pero no generan ni bloquean el evento.
 
 El script separa las velas cerradas de la vela en curso utilizando el `close_time` devuelto por Binance. Los avisos intravela son provisionales; la resolución se realiza al disponer del cierre de la vela correspondiente.
 
 ## 5. Alertas de Koncorde
 
-El **evento que dispara la alerta** es exclusivamente el cambio de posición de la **línea verde** respecto al área de volumen, delimitada por la línea marrón y el nivel cero.
+El **evento que dispara la alerta** es exclusivamente el cambio de posición de la **línea amarilla (media)** respecto al área de volumen, delimitada por la línea marrón y el nivel cero.
 
 Para cada vela, el área de volumen es el intervalo comprendido entre `0` y `marron`:
 
 - Si `marron` es positivo, el área va de cero a marrón.
 - Si `marron` es negativo, el área va de marrón a cero.
 
-La posición de la línea verde se clasifica así:
+La posición de la línea amarilla (media) se clasifica así:
 
-- **Dentro del área de volumen**: la línea verde está entre los dos límites, incluidos. Esto también se aplica cuando marrón y línea verde son negativos; por ejemplo, si marrón vale -10 y verde -5, la línea verde está dentro del área.
-- **Fuera por arriba**: la línea verde está por encima del límite superior.
-- **Fuera por abajo**: la línea verde está por debajo del límite inferior.
+- **Dentro del área de volumen**: la media está entre los dos límites, incluidos.
+- **Fuera por arriba**: la media está por encima del límite superior.
+- **Fuera por abajo**: la media está por debajo del límite inferior.
 
-La clasificación geométrica usa siempre ambos límites: `min(0, marron)` y `max(0, marron)`. Cruzar el nivel cero por sí solo no constituye una entrada o salida, salvo que ese cruce también cambie la posición de la línea verde respecto al intervalo completo. Los mensajes visibles indican únicamente entrada, salida o posición dentro/fuera; el lado de procedencia se conserva internamente para evaluar los filtros.\n\nLos eventos son:
+La clasificación geométrica utiliza siempre ambos límites: `min(0, marron)` y `max(0, marron)`. Por ejemplo, si marrón vale -10 y media -5, la media está dentro del área; si marrón vale -10 y media 2, está fuera por arriba.
 
-- **Entrada desde arriba**: la línea verde pasa de estar fuera por arriba a estar dentro del área.
-- **Entrada desde abajo**: la línea verde pasa de estar fuera por abajo a estar dentro del área.
-- **Salida por arriba**: la línea verde pasa de estar dentro del área a quedar fuera por arriba.
-- **Salida por abajo**: la línea verde pasa de estar dentro del área a quedar fuera por abajo.
+Los eventos son:
+
+- **Entrada desde arriba**: la media pasa de estar fuera por arriba a estar dentro del área.
+- **Entrada desde abajo**: la media pasa de estar fuera por abajo a estar dentro del área.
+- **Salida por arriba**: la media pasa de estar dentro del área a quedar fuera por arriba.
+- **Salida por abajo**: la media pasa de estar dentro del área a quedar fuera por abajo.
 
 Permanecer dentro o fuera no genera nuevos avisos. Tampoco se considera un evento nuevo pasar de fuera por arriba a fuera por abajo sin una transición observada por el interior del área. Al iniciar el seguimiento se establece una línea base sin emitir una alerta inicial.
 
-Si la línea marrón cambia de signo entre lecturas, el script actualiza la referencia de posición sin generar una entrada o salida en ese ciclo. Esta protección evita atribuir a la línea verde un evento artificial causado por la inversión del lado de la montaña.
+Si la línea marrón cambia de signo entre lecturas, el script actualiza la referencia sin generar una entrada o salida en ese ciclo. Esta protección evita atribuir a la línea amarilla un evento artificial causado por la inversión del lado de la montaña.
 
-La media amarilla y el cruce verde/media amarilla **no disparan** las alertas de esta revisión. El disparador es la línea verde entrando o saliendo del área de volumen.
+La línea verde **no dispara** eventos. El cruce entre la línea verde y la media amarilla tampoco dispara eventos. La línea verde puede conservarse como dato informativo, pero la decisión geométrica se basa únicamente en `media` y `marron`.
 
-### Tres filtros complementarios
+### Resolución al cierre
 
-Cada entrada o salida detectada se evalúa con los tres filtros existentes. Los filtros complementan el evento, pero no lo generan:
+Cada candidato provisional guarda el estado objetivo (`dentro`, `fuera_arriba` o `fuera_abajo`) y el identificador de la vela. Al cierre:
 
-1. **Valor de la línea verde**: comprueba si el valor está dentro del rango de referencia, extendido pero todavía aceptado, o en dirección contraria.
-2. **Trend Speed Analyzer (TSA)**: comprueba que la dirección del TSA acompañe a la dirección asignada al evento.
-3. **ADX y DI**: exige ADX igual o superior al umbral configurado y que DI+ o DI− domine en la dirección asignada al evento.
+- **CONFIRMADA**: la media amarilla termina en la misma posición objetivo que originó el candidato.
+- **INVALIDADA**: la transición se revierte antes del cierre o la media no termina en la posición esperada.
+- **NO VERIFICABLE**: no se puede recuperar la vela exacta del candidato para comprobar el resultado.
 
-Los rangos implementados para el filtro del valor verde se mantienen:
-
-- Dirección `alza`: dentro del rango entre **25 y 50**; los valores extendidos no negativos también se aceptan.
-- Dirección `baja`: dentro del rango **≤ -25**; los valores extendidos no positivos también se aceptan.
-- Un valor con signo contrario a la dirección no supera este filtro.
-
-El filtro ADX utiliza un mínimo de **20** y exige DI+ dominante para dirección `alza` o DI− dominante para dirección `baja`.
-
-Para aplicar los filtros sin alterar sus fórmulas ni umbrales, la dirección complementaria se asigna según el sentido del evento:
-
-| Evento de la línea verde | Dirección usada por los filtros |
-|---|---|
-| Entrada desde arriba | Baja |
-| Entrada desde abajo | Alza |
-| Salida por arriba | Alza |
-| Salida por abajo | Baja |
-
-Esta dirección solo determina cómo se evalúan los filtros ya existentes. No cambia qué elemento genera el evento: siempre es la línea verde entrando o saliendo del área de volumen.
-
-### Estados de los avisos
-
-- **PROVISIONAL**: se detecta una entrada o salida intravela que alcanza al menos 2/3 filtros. Se envía el detalle y se guarda el candidato.
-- **CONFIRMADA**: al cierre, la línea verde conserva la posición objetivo del evento y el candidato mantiene al menos 2/3 filtros.
-- **NO CONFIRMADA**: el evento se mantiene al cierre, pero termina con menos de 2/3 filtros.
-- **INVALIDADA**: la transición provisional se revierte antes del cierre o la línea verde no termina en la posición esperada.
-- **NO VERIFICABLE**: no se puede recuperar la vela exacta del candidato para comprobar su resultado.
-
-Los eventos con **0/3 o 1/3** filtros se registran en el histórico, pero no generan un aviso provisional de Telegram. Los IDs se conservan internamente para enlazar candidatos y resoluciones; no se muestran en los mensajes de BitMan, Koncorde ni ML RSI. Los mensajes provisionales muestran el precio en negrita. En ML RSI se muestra el valor RSI, pero no la referencia, el ID ni los umbrales dinámicos.
-
-## 6. Filtros de Koncorde: interpretación
-
-El resultado se expresa como `0/3`, `1/3`, `2/3` o `3/3`:
-
-- `3/3`: los tres filtros son favorables.
-- `2/3`: dos filtros son favorables; alcanza el umbral para enviar el aviso provisional.
-- `1/3` o `0/3`: no alcanza el umbral de aviso provisional; el evento queda registrado en el histórico.
-
-El filtro de valor puede aparecer como **dentro**, **extendido** o **contrario**. La condición extendida se acepta cuando conserva coherencia con la dirección asignada al evento. Por tanto, “extendido” no equivale necesariamente a filtro fallido.
-
-En el resumen diario se muestra la posición actual de la **línea verde** respecto al área de volumen y la explicación de los tres filtros. El recuento es una lectura contextual; no significa que se haya producido un evento nuevo. La referencia direccional usada para evaluar filtros se indica como `alza` o `baja`.
+El histórico de la alerta y el de su resolución incluyen los valores de la media amarilla y la línea marrón, la posición calculada y los límites del área. Estos campos permiten auditar qué línea generó el evento y con qué valores, sin modificar el criterio de detección.
 
 ## 7. BitMan e indicador de volatilidad BBWP
 
@@ -312,3 +275,21 @@ Esta versión adapta los cálculos Python a las fórmulas del Pine Script adjunt
 - Se mantienen los filtros internos existentes para decidir si se emite una alerta; no se muestran en el mensaje.
 
 No se modifican `state.json` ni `signals_history.jsonl`. La validación realizada es sintáctica y con datos sintéticos; no equivale a una prueba live contra Binance o Telegram.
+
+
+---
+
+## Corrección definitiva de alertas Koncorde
+
+Esta revisión sustituye cualquier descripción anterior de filtros o disparadores de Koncorde en este documento:
+
+- El único disparador es la entrada o salida de la **media amarilla (`media`, EMA 15 de `marron`)** respecto al área delimitada por `min(0, marron)` y `max(0, marron)`.
+- Se generan alertas provisionales en cuanto se detecta la transición. No se exige ningún filtro ni puntuación mínima.
+- Al cierre, el evento se confirma si la media amarilla mantiene la posición objetivo; se invalida si revierte. TS y ADX/DI no intervienen en esta decisión.
+- Se elimina el filtro del valor verde y toda la lógica de 2/3 filtros. La línea verde sigue calculándose para los demás usos del indicador, pero no participa en las alertas Koncorde.
+- TS y ADX/DI son exclusivamente informativos. Las alertas incluyen evento, volatilidad, TS y valores ADX/DI.
+- El apartado Koncorde del resumen diario muestra únicamente la posición/evento y TS.
+- Se conserva la protección contra eventos artificiales cuando cambia el signo de marron, así como la línea base inicial sin alerta.
+- No se modifican BitMan, ML RSI, `state.json` ni `signals_history.jsonl`.
+
+La validación realizada incluye compilación Python y pruebas geométricas de las transiciones. No se han realizado pruebas live contra Binance o Telegram.
