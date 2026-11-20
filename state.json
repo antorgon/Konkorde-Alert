@@ -38,7 +38,7 @@
   "koncorde_last_position_1d": "baja",
   "koncorde_last_candle_15m": "1794243599999",
   "koncorde_last_position_15m": "baja",
-  "ml_rsi_live_signal_1h": "gris",
+  "ml_rsi_live_signal_1h": "rojo",
   "ml_rsi_last_closed_candle_1h": "1795186799999",
   "history_event_ids": [
     "54bffd50e882ed49327044b1",
@@ -2327,7 +2327,11 @@
     "a40232844f8c5bd4a6e9ff1f",
     "1f375d45031abcf273df7cf1",
     "fabe0ecc553125c7af993c93",
-    "fda6562fa95501c33aecee1e"
+    "fda6562fa95501c33aecee1e",
+    "79f5d2c7afbd8e0f73b45e1b",
+    "7d9e4b16b46e929a7dc1e8ae",
+    "1e68a82ff3ca1938e4e967e4",
+    "e9e3f7fad63ba607dbcec5fb"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2556,12 +2560,12 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795187363644,
+  "last_cycle_ms": 1795187669295,
   "bitman_last_closed_1h": "1795186799999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1795190399999",
   "bitman_last_closed_4h": "1795175999999",
-  "bitman_live_signal_4h": "ESPERAR",
+  "bitman_live_signal_4h": "VENDER",
   "bitman_live_candle_4h": "1795190399999",
   "bitman_last_closed_1d": "1795132799999",
   "bitman_live_signal_1d": "ESPERAR",
@@ -2576,10 +2580,10 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-20",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795187363644,
-  "last_data_ok_4h": 1795187363644,
-  "last_data_ok_1d": 1795187363644,
-  "last_data_ok_1w": 1795187363644,
+  "last_data_ok_1h": 1795187669295,
+  "last_data_ok_4h": 1795187669295,
+  "last_data_ok_1d": 1795187669295,
+  "last_data_ok_1w": 1795187669295,
   "bitman_last_closed_1w": "1794787199999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795391999999",
@@ -2622,6 +2626,23 @@
       "direction": "alza",
       "event_id": "fabe0ecc553125c7af993c93",
       "detected_ms": 1795187366781
+    }
+  },
+  "pending_bitman_4h": {
+    "candle": "1795190399999",
+    "candidate": {
+      "signal": "VENDER",
+      "event_id": "79f5d2c7afbd8e0f73b45e1b",
+      "detected_ms": 1795187672641
+    },
+    "final_filter_count": 3
+  },
+  "pending_ml_rsi_1h": {
+    "candle": "1795190399999",
+    "candidate": {
+      "signal": "rojo",
+      "event_id": "1e68a82ff3ca1938e4e967e4",
+      "detected_ms": 1795187672651
     }
   }
 }
