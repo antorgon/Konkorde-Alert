@@ -744,7 +744,8 @@ def _send_transition(system: str, interval: str, label: str, old: str,
     block = (
         f"<b>{label} {SYMBOL} {interval.upper()}</b>\n"
         f"<b>{transition_title}</b>"
-        + ("" if system == "koncorde" else f"\nPrecio: <b>{price:.2f}</b>")
+        + (f"\nPrecio en detección: <b>{price:.2f} USDT</b>" if system == "koncorde"
+           else f"\nPrecio: <b>{price:.2f}</b>")
     )
     if system not in ("bitman", "koncorde", "ml_rsi"):
         block += (
@@ -753,7 +754,8 @@ def _send_transition(system: str, interval: str, label: str, old: str,
         )
     if indicators:
         block += "\n" + "\n".join(
-            f"{k}: {v:.2f}" if isinstance(v, (float, np.floating)) else f"{k}: {v}"
+            (str(v) if k == "Tendencia" else
+             f"{k}: {v:.2f}" if isinstance(v, (float, np.floating)) else f"{k}: {v}")
             for k, v in indicators.items() if v is not None
         )
     send_telegram(block)
@@ -766,25 +768,27 @@ def _send_transition(system: str, interval: str, label: str, old: str,
 
 
 def _adx_interpretacion(adx_value, di_plus, di_minus) -> str:
-    """Traduce ADX/DI a fuerza de tendencia y sesgo direccional."""
+    """Resume fuerza y dirección de la tendencia a partir de ADX/DI."""
     adx = _safe_float(adx_value)
     plus = _safe_float(di_plus)
     minus = _safe_float(di_minus)
     if adx is None or plus is None or minus is None:
-        return "Tendencia: datos ADX/DI no disponibles"
+        return "Tendencia: datos no disponibles"
     if adx >= 25:
         fuerza = "fuerte"
     elif adx >= 20:
         fuerza = "moderada"
     else:
         fuerza = "débil"
+    if adx < 20:
+        return "Tendencia débil: sin dirección clara."
     if plus > minus:
-        sesgo = "alcista"
+        direccion = "alcista"
     elif minus > plus:
-        sesgo = "bajista"
+        direccion = "bajista"
     else:
-        sesgo = "neutral"
-    return f"Fuerza de tendencia: {fuerza} · sesgo {sesgo}"
+        direccion = "sin dirección definida"
+    return f"Tendencia {fuerza}: {direccion}."
 
 
 def _resolve_pending(system: str, interval: str, row, state: dict,
@@ -817,7 +821,13 @@ def _resolve_pending(system: str, interval: str, row, state: dict,
         if system == "koncorde":
             event_name = str(candidate.get("event", "evento")).capitalize()
             event_side = str(candidate.get("side", ""))
-            outcome_line = f"{event_name} {event_side} {outcome.lower()}".strip()
+            if event_name.lower() == "entrada":
+                description = f"Entrada en el área de volumen {event_side}"
+            elif event_name.lower() == "salida":
+                description = f"Salida del área de volumen {event_side}"
+            else:
+                description = f"Evento de volumen {event_side}".strip()
+            outcome_line = f"{description} · {outcome.lower()}"
         elif system == "bitman":
             outcome_line = f"Señal {candidate.get('signal', final_signal)} {outcome.lower()}"
         else:
@@ -830,6 +840,7 @@ def _resolve_pending(system: str, interval: str, row, state: dict,
             )
             block = (f"<b>KONCORDE {SYMBOL} {interval.upper()}</b>\n"
                      f"<b>{outcome_line}</b>\n"
+                     f"Precio de cierre: <b>{float(row['close']):.2f} USDT</b>\n"
                      f"Volatilidad: {volatility}\nTS: {ts_text}\n{adx_text}")
         else:
             block = (
@@ -1083,12 +1094,12 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         event_type = "entrada"
         side = "desde arriba" if previous_position == "fuera_arriba" else "desde abajo"
         direction = "baja" if previous_position == "fuera_arriba" else "alza"
-        event_label = "ENTRADA EN ÁREA DE VOLUMEN"
+        event_label = f"Entrada en el área de volumen {side}"
     else:
         event_type = "salida"
         side = "por arriba" if current_position == "fuera_arriba" else "por abajo"
         direction = "alza" if current_position == "fuera_arriba" else "baja"
-        event_label = "SALIDA DEL ÁREA DE VOLUMEN"
+        event_label = f"Salida del área de volumen {side}"
 
     event_ms = _utc_now_ms()
     tsa_bullish = bool(row.get("tsa_bullish"))
