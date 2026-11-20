@@ -7,8 +7,8 @@ independiente H1, H4, D1 y 1W para BitMan/Koncorde y H1 para ML RSI.
 Los cambios detectados en la vela viva se notifican como provisionales y
 se resuelven al cierre. Los candidatos pendientes y los avisos enviados
 se conservan en state.json; signals_history.jsonl es un histórico append-only.
-Las fórmulas, filtros, umbrales y condiciones originales de los indicadores
-se mantienen sin cambios.
+Las alertas Koncorde se disparan exclusivamente por entrada/salida de la media
+amarilla en el área de volumen. TS y ADX/DI son datos informativos, no filtros.
 
 Variables de entorno: TELEGRAM_TOKEN y TELEGRAM_CHAT_ID.
 """
@@ -548,70 +548,8 @@ def send_telegram(message: str):
 
 # --------------------------- MAIN (revisa varias temporalidades) ---------------------------
 
-VALOR_MIN_ALZA, VALOR_MAX_ALZA = 25, 50
-VALOR_MAX_BAJA = -25
-
-ICONO_VALOR = {"dentro": "🟢", "extendido": "🟡", "contrario": "🔴"}
-TEXTO_VALOR = {
-    "dentro": "dentro del rango validado",
-    "extendido": "fuera del rango validado (sin ventaja estadística demostrada)",
-    "contrario": "signo contrario a la dirección del evento",
-}
-
-
-def evaluar_condiciones_koncorde(vela, direccion: str) -> dict:
-    """Evalua las 3 condiciones del sistema de cruces para una vela y una
-    direccion dadas. 'vela' es normalmente la vela EN CURSO (nunca una
-    cerrada, desde el refactor a avisos instantaneos) -- la direccion puede
-    venir de un cambio de posicion real, o -- para el resumen de 'otras
-    temporalidades' -- simplemente de si verde esta ahora mismo por encima
-    o por debajo de media, sin que haya habido un cambio."""
-    verde_val = vela["verde"]
-    tsa_bullish = bool(vela["tsa_bullish"])
-    adx_val = vela["adx"]
-    di_plus, di_minus = vela["di_plus"], vela["di_minus"]
-
-    if direccion == "alza":
-        rango_valor_txt = f"{VALOR_MIN_ALZA} a {VALOR_MAX_ALZA}"
-        if VALOR_MIN_ALZA <= verde_val <= VALOR_MAX_ALZA:
-            valor_estado = "dentro"
-        elif verde_val >= 0:
-            valor_estado = "extendido"
-        else:
-            valor_estado = "contrario"
-        tsa_ok = tsa_bullish
-        adx_ok = adx_val >= ADX_MEDIO and di_plus > di_minus
-    else:
-        rango_valor_txt = f"≤ {VALOR_MAX_BAJA}"
-        if verde_val <= VALOR_MAX_BAJA:
-            valor_estado = "dentro"
-        elif verde_val <= 0:
-            valor_estado = "extendido"
-        else:
-            valor_estado = "contrario"
-        tsa_ok = not tsa_bullish
-        adx_ok = adx_val >= ADX_MEDIO and di_minus > di_plus
-
-    valor_ok = valor_estado in ("dentro", "extendido")
-    n_ok = sum([valor_ok, tsa_ok, adx_ok])
-
-    return {
-        "verde_val": verde_val, "tsa_bullish": tsa_bullish, "adx_val": adx_val,
-        "valor_estado": valor_estado, "rango_valor_txt": rango_valor_txt,
-        "valor_ok": valor_ok, "tsa_ok": tsa_ok, "adx_ok": adx_ok, "n_ok": n_ok,
-    }
-
-
-
-
-
-
-
-
-
-
-
-
+# En Koncorde el evento depende exclusivamente de la media amarilla y el área
+# de volumen. TS y ADX/DI se muestran como contexto, nunca como filtros.
 
 
 # ============================================================================
@@ -838,8 +776,7 @@ def _send_transition(system: str, interval: str, label: str, old: str,
 
 
 def _resolve_pending(system: str, interval: str, row, state: dict,
-                     final_signal: str, valid: bool = True,
-                     final_filter_count: int = 3):
+                     final_signal: str, valid: bool = True):
     """Resuelve una única candidatura pendiente cuando cierra su vela."""
     key = f"pending_{system}_{interval}"
     pending = state.get(key)
@@ -857,14 +794,9 @@ def _resolve_pending(system: str, interval: str, row, state: dict,
             outcome = "NO VERIFICABLE"
             detail = ("No se pudo recuperar la vela exacta del candidato; "
                       "no es posible determinar si se mantuvo al cierre.")
-        elif int(final_filter_count) < 2:
-            outcome = "NO CONFIRMADA"
-            detail = ("La transición se mantuvo, pero terminó con menos de 2/3 filtros válidos."
-                      if system == "koncorde" else
-                      "La señal no conservó las condiciones necesarias al cierre.")
         else:
             outcome = "CONFIRMADA"
-            detail = ("La línea amarilla mantuvo la posición del evento respecto al área de volumen al cierre y conservó al menos 2/3 filtros."
+            detail = ("La línea amarilla mantuvo la posición del evento respecto al área de volumen al cierre."
                       if system == "koncorde" else
                       "La señal se mantuvo al cierre." if system == "bitman" else
                       "El estado se mantuvo al cierre.")
@@ -881,9 +813,18 @@ def _resolve_pending(system: str, interval: str, row, state: dict,
         if system == "koncorde":
             volatility = _volatilidad_resumen(row.get("bbwp"))
             ts_text = "alcista" if bool(row.get("tsa_bullish")) else "bajista"
-            block = (f"<b>KONCORDE {SYMBOL} {interval.upper()}</b>\n"
-                     f"<b>{outcome_line}</b>\n"
-                     f"Volatilidad: {volatility}\nTS: {ts_text}")
+            adx_value = _safe_float(row.get("adx"))
+            di_plus = _safe_float(row.get("di_plus"))
+            di_minus = _safe_float(row.get("di_minus"))
+            adx_text = (f"ADX: {adx_value:.1f} · DI+: {di_plus:.1f} · DI-: {di_minus:.1f}"
+                        if adx_value is not None and di_plus is not None and di_minus is not None
+                        else "ADX/DI: no disponible")
+            audit = _koncorde_audit_indicators(row)
+            block = (f"<b>KONCORDE {SYMBOL} {interval.upper()}</b>\\n"
+                     f"<b>{outcome_line}</b>\\n"
+                     f"Media amarilla: {audit['media']:.2f} · Marrón: {audit['marron']:.2f}\\n"
+                     f"Posición al cierre: {audit['media_volume_position']}\\n"
+                     f"Volatilidad: {volatility}\\nTS: {ts_text}\\n{adx_text}")
         else:
             block = (
                 f"<b>{system.upper()} {SYMBOL} {interval.upper()}</b>\n"
@@ -895,7 +836,11 @@ def _resolve_pending(system: str, interval: str, row, state: dict,
             state, system=system, interval=interval, kind="candle_resolution",
             signal=outcome, price=float(row["close"]), event_time_ms=event_ms,
             status=outcome.lower().replace(" ", "_"),
-            indicators={"source_event_id": eid, "final_signal": final_signal},
+            indicators={
+                "source_event_id": eid,
+                "final_signal": final_signal,
+                **(_koncorde_audit_indicators(row) if system == "koncorde" else {}),
+            },
             telegram_sent=True,
         )
     state.pop(key, None)
@@ -1039,16 +984,9 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         pending_close, pending_valid = _pending_close_row("koncorde", interval, df_closed, state)
         if pending_close is not None:
             close_position = _koncorde_estado_volumen(pending_close)
-            pending_candidate = state.get(key, {}).get("candidate") or {}
-            pending_direction = pending_candidate.get("direction")
-            if pending_direction in ("alza", "baja"):
-                pending_filters = evaluar_condiciones_koncorde(pending_close, pending_direction)
-                final_filter_count = int(pending_filters["n_ok"])
-            else:
-                final_filter_count = 0
             _resolve_pending(
                 "koncorde", interval, pending_close, state,
-                close_position, pending_valid, final_filter_count
+                close_position, pending_valid
             )
 
         closed_row = df_closed.iloc[-1]
@@ -1115,28 +1053,28 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         direction = "alza" if current_position == "fuera_arriba" else "baja"
         event_label = "SALIDA DEL ÁREA DE VOLUMEN"
 
-    c = evaluar_condiciones_koncorde(row, direction)
-    n_ok = int(c["n_ok"])
     event_ms = _utc_now_ms()
-    filters = {
-        "value_ok": bool(c["valor_ok"]),
-        "tsa_ok": bool(c["tsa_ok"]),
-        "adx_ok": bool(c["adx_ok"]),
-        "n_ok": n_ok,
-        "value_state": c["valor_estado"],
-    }
+    tsa_bullish = bool(row.get("tsa_bullish"))
+    adx_value = _safe_float(row.get("adx"))
+    di_plus = _safe_float(row.get("di_plus"))
+    di_minus = _safe_float(row.get("di_minus"))
+    ts_text = "alcista" if tsa_bullish else "bajista"
+    adx_text = (f"ADX: {adx_value:.1f} · DI+: {di_plus:.1f} · DI-: {di_minus:.1f}"
+                if adx_value is not None and di_plus is not None and di_minus is not None
+                else "ADX/DI: no disponible")
 
     _record_event(
         state, system="koncorde", interval=interval, kind=f"intrabar_{event_type}",
         signal=f"{event_type}_{side.replace(' ', '_')}",
         price=float(row["close"]), event_time_ms=event_ms,
-        status="candidate" if n_ok >= 2 else "weak",
+        status="candidate",
         indicators={
             **_indicators_for_history(row),
             "event": event_type,
             "side": side,
             "media_volume_position": _koncorde_posicion_volumen(row),
-            "filters": filters,
+            "informative": {"ts": ts_text, "adx": adx_value,
+                            "di_plus": di_plus, "di_minus": di_minus},
         },
         telegram_sent=False,
     )
@@ -1154,52 +1092,50 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
             indicators={
                 "previous_event_id": old_candidate.get("event_id"),
                 "new_event": event_type,
-                "weak_filters": n_ok,
+                "replaced_by_event": event_type,
             },
             telegram_sent=False,
         )
 
-    if n_ok >= 2:
-        indicators = {
-            "Evento": event_label,
-            "Volatilidad": _volatilidad_resumen(row.get("bbwp")),
-            "TS": "alcista" if c["tsa_bullish"] else "bajista",
-        }
-        new_eid = _send_transition(
-            "koncorde", interval, "KONCORDE", previous_position,
-            event_label, row, indicators, state,
-            f"intrabar_{event_type}", "provisional", event_ms,
-        )
-        if old_candidate:
-            _record_event(
-                state, system="koncorde", interval=interval,
-                kind="candidate_superseded", signal=event_label,
-                price=float(row["close"]), event_time_ms=event_ms,
-                status="superseded",
-                indicators={
-                    "previous_event_id": old_candidate.get("event_id"),
-                    "new_event_id": new_eid,
-                },
-                telegram_sent=False,
-            )
-        state[key] = {
-            "candle": candle,
-            "candidate": {
-                # signal es el estado objetivo al cierre: dentro/fuera.
-                "signal": current_position,
-                "event": event_type,
-                "side": side,
-                "direction": direction,
-                "event_id": new_eid,
-                "filters": n_ok,
-                "detected_ms": event_ms,
+    audit = _koncorde_audit_indicators(row)
+    indicators = {
+        "Evento": event_label,
+        "Media amarilla": audit["media"],
+        "Línea marrón": audit["marron"],
+        "Posición de media": audit["media_volume_position"],
+        "Volatilidad": _volatilidad_resumen(row.get("bbwp")),
+        "TS": ts_text,
+        "ADX/DI": adx_text,
+    }
+    new_eid = _send_transition(
+        "koncorde", interval, "KONCORDE", previous_position,
+        event_label, row, indicators, state,
+        f"intrabar_{event_type}", "provisional", event_ms,
+    )
+    if old_candidate:
+        _record_event(
+            state, system="koncorde", interval=interval,
+            kind="candidate_superseded", signal=event_label,
+            price=float(row["close"]), event_time_ms=event_ms,
+            status="superseded",
+            indicators={
+                "previous_event_id": old_candidate.get("event_id"),
+                "new_event_id": new_eid,
             },
-        }
-    elif old_candidate:
-        # Si la nueva transición no alcanza filtros, no se mantiene vigente
-        # la candidatura anterior que ya ha sido revertida.
-        old_candidate["invalidated"] = True
-
+            telegram_sent=False,
+        )
+    state[key] = {
+        "candle": candle,
+        "candidate": {
+            # signal es el estado objetivo al cierre: dentro/fuera.
+            "signal": current_position,
+            "event": event_type,
+            "side": side,
+            "direction": direction,
+            "event_id": new_eid,
+            "detected_ms": event_ms,
+        },
+    }
     state[pos_key] = current_position
     state[sign_key] = current_sign
 
@@ -1416,6 +1352,23 @@ def _koncorde_estado_volumen(row) -> str:
 def _koncorde_signo_marron(value) -> int:
     value = float(value)
     return 1 if value > 0 else -1 if value < 0 else 0
+
+
+def _koncorde_audit_indicators(row) -> dict:
+    """Datos auditables del evento; no intervienen en filtros ni decisiones."""
+    media = float(row["media"])
+    marron = float(row["marron"])
+    verde = _safe_float(row.get("verde"))
+    position = _koncorde_posicion_volumen(row)
+    return {
+        "media": media,
+        "marron": marron,
+        "verde": verde,
+        "media_volume_position": position,
+        "media_inside_volume_area": position == "dentro del área de volumen",
+        "volume_area_lower": min(0.0, marron),
+        "volume_area_upper": max(0.0, marron),
+    }
 
 
 def _koncorde_resumen(interval: str, item: dict, state: dict) -> str:
