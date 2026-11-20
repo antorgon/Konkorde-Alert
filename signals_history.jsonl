@@ -5430,3 +5430,4 @@
 {"record_type":"signal","event_id":"661c1e9daf1b8616af8dda73","symbol":"BTCUSDT","system":"koncorde","interval":"1h","kind":"telegram_sent","signal":"SALIDA DEL ÁREA DE VOLUMEN:8df5cb00698295a335210078","status":"provisional","event_time_ms":1795176352663,"event_time_utc":"2026-11-20T12:05:52.663000+00:00","detected_time_ms":1795176353358,"sent_time_ms":1795176353358,"candle_time_ms":null,"price":61520.01,"telegram_sent":true,"indicators":{"source_event_id":"8df5cb00698295a335210078"}}
 {"record_type":"bot_cycle","event_time_ms":1795176655943}
 {"record_type":"bot_cycle","event_time_ms":1795176961127}
+{"record_type":"bot_cycle","event_time_ms":1795177266546}
