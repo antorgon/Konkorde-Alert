@@ -97,24 +97,56 @@ def _rsi(series: pd.Series, length: int = 14) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 
+def _rma(series: pd.Series, length: int) -> pd.Series:
+    """ta.rma de Pine: semilla SMA(length) y recurrencia Wilder."""
+    x = series.astype(float)
+    out = pd.Series(np.nan, index=x.index, dtype=float)
+    valid = x.first_valid_index()
+    if valid is None:
+        return out
+    first_pos = x.index.get_loc(valid)
+    seed_pos = first_pos + length - 1
+    if seed_pos >= len(x):
+        return out
+    seed = x.iloc[first_pos:seed_pos + 1]
+    if seed.isna().any():
+        # Pine propaga na hasta reunir length observaciones válidas consecutivas.
+        for j in range(first_pos, len(x) - length + 1):
+            w = x.iloc[j:j + length]
+            if w.notna().all():
+                seed_pos = j + length - 1
+                seed = w
+                break
+        else:
+            return out
+    out.iloc[seed_pos] = float(seed.mean())
+    for i in range(seed_pos + 1, len(x)):
+        if pd.isna(x.iloc[i]):
+            out.iloc[i] = out.iloc[i - 1]
+        else:
+            out.iloc[i] = (out.iloc[i - 1] * (length - 1) + x.iloc[i]) / length
+    return out
+
+
 def _rsi_wilder(series: pd.Series, length: int) -> pd.Series:
-    """RSI con suavizado de Wilder, replica exacta de ta.rsi de Pine
-    (distinto del _rsi() de arriba, que usa media simple y solo se usa
-    como componente interno del Koncorde)."""
-    delta = series.diff()
-    gain = delta.clip(lower=0).ewm(alpha=1 / length, adjust=False).mean()
-    loss = (-delta.clip(upper=0)).ewm(alpha=1 / length, adjust=False).mean()
-    rs = gain / loss.replace(0, 1e-12)
-    return 100 - (100 / (1 + rs))
+    """RSI de Pine ta.rsi: RMA de ganancias y pérdidas con semilla SMA."""
+    delta = series.astype(float).diff()
+    gain = _rma(delta.clip(lower=0), length)
+    loss = _rma((-delta).clip(lower=0), length)
+    rs = gain / loss.replace(0, np.nan)
+    result = 100 - (100 / (1 + rs))
+    result = result.where(loss != 0, 100.0)
+    result = result.where(~((gain == 0) & (loss == 0)), 50.0)
+    return result
 
 
 def _mfi(df: pd.DataFrame, length: int = 14) -> pd.Series:
-    src = (df["high"] + df["low"] + df["close"]) / 3.0
-    change = src.diff()
-    pos = (df["volume"] * src.where(change > 0, 0)).rolling(length).sum()
-    neg = (df["volume"] * src.where(change <= 0, 0)).rolling(length).sum()
-    rs = pos / neg.replace(0, 1e-12)
-    return 100 - (100 / (1 + rs))
+    """Calc_mfi del Pine adjunto: ratio de flujos, NO MFI normalizado 0-100."""
+    hlc3 = (df["high"] + df["low"] + df["close"]) / 3.0
+    change = hlc3.diff()
+    positive = (df["volume"] * hlc3.where(change > 0, 0.0)).rolling(length, min_periods=length).sum()
+    negative = (df["volume"] * hlc3.where(change < 0, 0.0)).rolling(length, min_periods=length).sum()
+    return positive / negative.replace(0, np.nan)
 
 
 def _stoch(series, high, low, length=21, smooth=3):
@@ -142,32 +174,35 @@ def _pvi_nvi(df: pd.DataFrame):
 
 
 def compute_koncorde(df: pd.DataFrame, m: int = 15, copy: bool = True) -> pd.DataFrame:
+    """Replica las fórmulas del bloque Koncorde del Pine adjunto."""
     if copy:
         df = df.copy()
     tprice = (df["open"] + df["high"] + df["low"] + df["close"]) / 4.0
+    hlc3 = (df["high"] + df["low"] + df["close"]) / 3.0
     df = _pvi_nvi(df)
 
-    pvim = df["pvi"].ewm(span=m, adjust=False).mean()
-    oscp = (df["pvi"] - pvim) * 100 / (pvim.rolling(90).max() - pvim.rolling(90).min())
+    pvim = df["pvi"].ewm(span=m, adjust=False, min_periods=1).mean()
+    pvimax, pvimin = pvim.rolling(90, min_periods=90).max(), pvim.rolling(90, min_periods=90).min()
+    oscp = (df["pvi"] - pvim) * 100.0 / (pvimax - pvimin).replace(0, np.nan)
 
-    nvim = df["nvi"].ewm(span=m, adjust=False).mean()
-    azul = (df["nvi"] - nvim) * 100 / (nvim.rolling(90).max() - nvim.rolling(90).min())
+    nvim = df["nvi"].ewm(span=m, adjust=False, min_periods=1).mean()
+    nvimax, nvimin = nvim.rolling(90, min_periods=90).max(), nvim.rolling(90, min_periods=90).min()
+    azul = (df["nvi"] - nvim) * 100.0 / (nvimax - nvimin).replace(0, np.nan)
 
-    xmf, xrsi = _mfi(df, 14), _rsi(tprice, 14)
-
-    basis = tprice.rolling(25).mean()
-    dev = 2.0 * tprice.rolling(25).std()
-    ob1 = ((basis + dev) + (basis - dev)) / 2.0
-    ob2 = (basis + dev) - (basis - dev)
-    boll_osc = ((tprice - ob1) / ob2) * 100
-
+    xmf = _mfi(df, 14)
+    xrsi = _rsi_wilder(tprice, 14)
+    basis = tprice.rolling(25, min_periods=25).mean()
+    dev = 2.0 * tprice.rolling(25, min_periods=25).std(ddof=0)
+    upper, lower = basis + dev, basis - dev
+    ob1, ob2 = (upper + lower) / 2.0, upper - lower
+    boll_osc = (tprice - ob1) / ob2.replace(0, np.nan) * 100.0
     stoc = _stoch(tprice, df["high"], df["low"], 21, 3)
 
-    marron = (xrsi + xmf + boll_osc + (stoc / 3)) / 2
+    marron = (xrsi + xmf + boll_osc + stoc / 3.0) / 2.0
     df["marron"] = marron
     df["verde"] = marron + oscp
     df["azul"] = azul
-    df["media"] = marron.ewm(span=m, adjust=False).mean()
+    df["media"] = marron.ewm(span=m, adjust=False, min_periods=1).mean()
     return df
 
 
@@ -228,53 +263,38 @@ def compute_trend_speed(df: pd.DataFrame, max_length: int = TSA_MAX_LENGTH,
     return df
 
 
-# --------------------------- ADX (fuerza de tendencia, DMI de Wilder) ---------------------------
-# Replica de "EMA 50 ADX por intensidad": ta.dmi(14,14) + una EMA(3) extra
-# de suavizado sobre el ADX resultante. Se usa como tercer filtro de
-# confirmacion: exige que haya tendencia con fuerza suficiente, algo que ni
-# el Koncorde ni el Trend Speed Analyzer miden por si solos (ambos miran
-# direccion/momentum, no fuerza de tendencia).
+# --------------------------- ADX (DMI/ADX del Pine adjunto) ---------------------------
+# DI Length 14 y ADX Smoothing 14; suavizado Wilder/RMA, sin EMA adicional.
 ADX_DI_LENGTH = 14
 ADX_SMOOTHING = 14
-ADX_EMA_SMOOTH = 3
+ADX_EMA_SMOOTH = 0  # El Pine no aplica una EMA adicional al ADX.
 ADX_MEDIO = 20.0   # umbral minimo para considerar que hay tendencia
 
 
-def _rma(series: pd.Series, length: int) -> pd.Series:
-    """Suavizado de Wilder (equivalente a ta.rma de Pine): EMA con
-    alpha = 1/length."""
-    return series.ewm(alpha=1 / length, adjust=False).mean()
-
-
 def compute_adx(df: pd.DataFrame, di_length: int = ADX_DI_LENGTH,
-                 adx_smoothing: int = ADX_SMOOTHING, ema_smooth: int = ADX_EMA_SMOOTH,
+                 adx_smoothing: int = ADX_SMOOTHING, ema_smooth: int = 0,
                  copy: bool = True) -> pd.DataFrame:
+    """Replica el DMI/ADX del Pine: RMA Wilder(14), sin EMA adicional."""
     if copy:
         df = df.copy()
     high, low, close = df["high"], df["low"], df["close"]
     prev_high, prev_low, prev_close = high.shift(1), low.shift(1), close.shift(1)
-
-    up_move = high - prev_high
-    down_move = prev_low - low
-    plus_dm = pd.Series(np.where((up_move > down_move) & (up_move > 0), up_move, 0.0), index=df.index)
-    minus_dm = pd.Series(np.where((down_move > up_move) & (down_move > 0), down_move, 0.0), index=df.index)
-
-    tr = pd.concat([
-        high - low,
-        (high - prev_close).abs(),
-        (low - prev_close).abs(),
-    ], axis=1).max(axis=1)
-
-    tr_smooth = _rma(tr, di_length)
-    di_plus = 100 * _rma(plus_dm, di_length) / tr_smooth
-    di_minus = 100 * _rma(minus_dm, di_length) / tr_smooth
-
-    dx = 100 * (di_plus - di_minus).abs() / (di_plus + di_minus)
-    adx_raw = _rma(dx, adx_smoothing)
-
-    df["di_plus"] = di_plus
-    df["di_minus"] = di_minus
-    df["adx"] = adx_raw.ewm(span=ema_smooth, adjust=False).mean()
+    up, down = high.diff(), -low.diff()
+    plus_dm = pd.Series(np.where(up.isna(), np.nan,
+                         np.where((up > down) & (up > 0), up, 0.0)), index=df.index)
+    minus_dm = pd.Series(np.where(down.isna(), np.nan,
+                          np.where((down > up) & (down > 0), down, 0.0)), index=df.index)
+    tr = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+    tr.iloc[0] = high.iloc[0] - low.iloc[0]
+    trur = _rma(tr, di_length)
+    plus = (100.0 * _rma(plus_dm, di_length) / trur).replace([np.inf, -np.inf], np.nan).ffill()
+    minus = (100.0 * _rma(minus_dm, di_length) / trur).replace([np.inf, -np.inf], np.nan).ffill()
+    total = plus + minus
+    dx = 100.0 * (plus - minus).abs() / total.where(total != 0, 1.0)
+    adx = 100.0 * _rma((plus - minus).abs() / total.where(total != 0, 1.0), adx_smoothing)
+    df["di_plus"] = plus
+    df["di_minus"] = minus
+    df["adx"] = adx
     return df
 
 
@@ -296,44 +316,45 @@ def compute_adx(df: pd.DataFrame, di_length: int = ADX_DI_LENGTH,
 
 
 def compute_ao(df: pd.DataFrame, copy: bool = True) -> pd.DataFrame:
-    """Awesome Oscillator (5/34) y su estado de 4 valores."""
+    """AO del Pine y su escalado de 50 barras; color según diff del escalado."""
     if copy:
         df = df.copy()
-    median = (df["high"] + df["low"]) / 2
-    ao = median.rolling(5).mean() - median.rolling(34).mean()
-    subiendo = ao > ao.shift(1)
-    es_positivo = ao >= 0
-    hay_dato = ao.notna() & ao.shift(1).notna()  # evita clasificar NaN como "bajista" por False==False
-    condiciones = [
-        hay_dato & es_positivo & subiendo,
-        hay_dato & es_positivo & ~subiendo,
-        hay_dato & (~es_positivo) & (~subiendo),
-        hay_dato & (~es_positivo) & subiendo,
-    ]
-    opciones = ["alcista", "retroceso_alcista", "bajista", "retroceso_bajista"]
+    hl2 = (df["high"] + df["low"]) / 2.0
+    ao = hl2.rolling(5, min_periods=5).mean() - hl2.rolling(34, min_periods=34).mean()
+    ao_max = ao.rolling(50, min_periods=50).max()
+    ao_min = ao.rolling(50, min_periods=50).min()
+    ao_range = ao_max - ao_min
+    ao_scaled = (ao / ao_range.replace(0, np.nan)) * 100.0
+    ao_scaled = ao_scaled.where(ao_range != 0, 0.0)
+    diff = ao_scaled - ao_scaled.shift(1)
     df["ao"] = ao
-    df["ao_estado"] = np.select(condiciones, opciones, default=None)
+    df["ao_scaled"] = ao_scaled
+    df["ao_diff"] = diff
+    df["ao_estado"] = np.where(diff > 0, "alcista", "bajista")
+    df.loc[diff.isna(), "ao_estado"] = None
     return df
 
 
 def compute_bbwp(df: pd.DataFrame, length: int = 13, lookback: int = 252,
                  copy: bool = True) -> pd.DataFrame:
-    """BBWP: percentil (0-100) de la anchura de las Bandas de Bollinger
-    frente a su propio historial. Puramente informativo -- en el panel
-    original tampoco participa en la logica COMPRAR/VENDER/ESPERAR (solo se
-    muestra como contexto de volatilidad), asi que aqui se calcula pero no
-    condiciona el veredicto."""
+    """BBWP según f_bbwp del Pine: SMA(13), stdev poblacional y rango previo."""
     if copy:
         df = df.copy()
-    basis = df["close"].rolling(length).mean()
-    dev = df["close"].rolling(length).std(ddof=0)
-    width = 2 * dev / basis
-
-    # Rolling.rank(pct=True) devuelve exactamente el percentil de la
-    # observacion actual dentro de cada ventana. Es equivalente al
-    # antiguo rolling().apply() pero ejecutado por pandas de forma
-    # vectorizada, sin una funcion Python por ventana.
-    df["bbwp"] = width.rolling(lookback, min_periods=5).rank(pct=True) * 100.0
+    price = df["close"].astype(float)
+    basis = price.rolling(length, min_periods=length).mean()
+    dev = price.rolling(length, min_periods=length).std(ddof=0)
+    width = (2.0 * dev) / basis.replace(0, np.nan)
+    # Pine compara con las barras anteriores (1..lookback), no incluye la actual.
+    vals = width.to_numpy(dtype=float)
+    out = np.full(len(vals), np.nan)
+    for i in range(len(vals)):
+        n = min(i, lookback)
+        if i >= lookback and n == lookback and np.isfinite(vals[i]):
+            hist = vals[i-n:i]
+            hist = hist[np.isfinite(hist)]
+            if len(hist) == n:
+                out[i] = np.sum(hist <= vals[i]) / n * 100.0
+    df["bbwp"] = out
     return df
 
 
@@ -410,19 +431,18 @@ def motivo_espera(row) -> str:
 ML_RSI_LENGTH = 27
 ML_RSI_SMOOTH_PERIOD = 4
 ML_RSI_MAX_DATA = 3000
-ML_RSI_MAX_ITER = 2000
+ML_RSI_MAX_ITER = 1000
 
 
 def _kmeans_1d_3(values: np.ndarray, max_iter: int = ML_RSI_MAX_ITER) -> np.ndarray | None:
-    """Replica exacta del bucle de k-means 1D del Pine: semilla en
-    percentiles 25/50/75, reasignacion + recalculo de medias hasta
-    converger o agotar max_iter. Devuelve los 3 centroides SIN ordenar
-    (igual que el original, que no los ordena -- en la practica mantienen
-    el orden ascendente porque la semilla ya viene ordenada)."""
+    """K-means 1D de 3 grupos: semilla percentiles 25/50/75 y hasta 1001
+    iteraciones, como el bucle Pine. Se corrige la inicialización defectuosa
+    de arrays del código Pine adjunto (que inserta ceros antes de distancias
+    y medias); se implementa la asignación prevista por el algoritmo."""
     if len(values) < 4:
         return None
     centroids = np.percentile(values, [25, 50, 75])
-    for _ in range(max_iter):
+    for _ in range(max_iter + 1):
         dist = np.abs(values[:, None] - centroids[None, :])
         idx = np.argmin(dist, axis=1)
         nuevos = np.array([
@@ -795,8 +815,8 @@ def _send_transition(system: str, interval: str, label: str, old: str,
     )
     block = (
         f"<b>{label} {SYMBOL} {interval.upper()}</b>\n"
-        f"<b>{transition_title}</b>\n"
-        f"Precio: <b>{price:.2f}</b>"
+        f"<b>{transition_title}</b>"
+        + ("" if system == "koncorde" else f"\nPrecio: <b>{price:.2f}</b>")
     )
     if system not in ("bitman", "koncorde", "ml_rsi"):
         block += (
@@ -858,11 +878,18 @@ def _resolve_pending(system: str, interval: str, row, state: dict,
             outcome_line = f"Señal {candidate.get('signal', final_signal)} {outcome.lower()}"
         else:
             outcome_line = f"Señal {candidate.get('signal', final_signal)} {outcome.lower()}"
-        block = (
-            f"<b>{system.upper()} {SYMBOL} {interval.upper()}</b>\n"
-            f"<b>{outcome_line}</b>\n"
-            f"{detail}\nPrecio de cierre: <b>{float(row['close']):.2f}</b>"
-        )
+        if system == "koncorde":
+            volatility = _volatilidad_resumen(row.get("bbwp"))
+            ts_text = "alcista" if bool(row.get("tsa_bullish")) else "bajista"
+            block = (f"<b>KONCORDE {SYMBOL} {interval.upper()}</b>\n"
+                     f"<b>{outcome_line}</b>\n"
+                     f"Volatilidad: {volatility}\nTS: {ts_text}")
+        else:
+            block = (
+                f"<b>{system.upper()} {SYMBOL} {interval.upper()}</b>\n"
+                f"<b>{outcome_line}</b>\n"
+                f"{detail}\nPrecio de cierre: <b>{float(row['close']):.2f}</b>"
+            )
         send_telegram(block)
         _record_event(
             state, system=system, interval=interval, kind="candle_resolution",
@@ -1133,25 +1160,10 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         )
 
     if n_ok >= 2:
-        value_text = (
-            f"{c['verde_val']:.1f} {ICONO_VALOR[c['valor_estado']]} "
-            f"({TEXTO_VALOR[c['valor_estado']]})"
-        )
         indicators = {
             "Evento": event_label,
-            "Línea amarilla (media) respecto al área de volumen": _koncorde_posicion_volumen(row),
-            "Valor verde": value_text,
-            "Rango de referencia del valor verde": c["rango_valor_txt"],
-            "Valor verde (dato capturado)": _safe_float(row["verde"]),
-            "Trend Speed Analyzer": (
-                f"{'alcista' if c['tsa_bullish'] else 'bajista'} "
-                f"{'✅' if c['tsa_ok'] else '❌'}"
-            ),
-            "ADX": (
-                f"{c['adx_val']:.1f} {'✅' if c['adx_ok'] else '❌'} "
-                f"(DI+ {float(row['di_plus']):.1f} / DI- {float(row['di_minus']):.1f})"
-            ),
-            "Filtros": f"{n_ok}/3",
+            "Volatilidad": _volatilidad_resumen(row.get("bbwp")),
+            "TS": "alcista" if c["tsa_bullish"] else "bajista",
         }
         new_eid = _send_transition(
             "koncorde", interval, "KONCORDE", previous_position,
@@ -1408,46 +1420,11 @@ def _koncorde_signo_marron(value) -> int:
 
 def _koncorde_resumen(interval: str, item: dict, state: dict) -> str:
     row = item["live"].iloc[-1]
-    volume_position = _koncorde_posicion_volumen(row)
-    volume_state = _koncorde_estado_volumen(row)
-
-    # La dirección contextual para mostrar los filtros sigue los criterios
-    # existentes; dentro del área se toma el signo de la propia línea verde.
-    if volume_state == "fuera_arriba":
-        filter_direction = "alza"
-    elif volume_state == "fuera_abajo":
-        filter_direction = "baja"
-    else:
-        filter_direction = "alza" if float(row["verde"]) >= 0 else "baja"
-
-    c = evaluar_condiciones_koncorde(row, filter_direction)
-    value_text = {
-        "dentro": "valor dentro del rango",
-        "extendido": "valor extendido (filtro aceptado)",
-        "contrario": "valor fuera de dirección",
-    }[c["valor_estado"]]
-    tsa_text = "TSA alcista" if c["tsa_bullish"] else "TSA bajista"
-    di_text = "DI+ dominante" if float(row["di_plus"]) > float(row["di_minus"]) else "DI- dominante"
-    adx_text = f"ADX válido ({di_text})" if c["adx_ok"] else f"ADX no válido ({di_text})"
-    filters = (
-        f"{'✅' if c['valor_ok'] else '❌'} {value_text}, "
-        f"{'✅' if c['tsa_ok'] else '❌'} {tsa_text}, "
-        f"{'✅' if c['adx_ok'] else '❌'} {adx_text}"
-    )
-
-    candidate = state.get(f"pending_koncorde_{interval}", {}).get("candidate")
-    pending_text = ""
-    if candidate:
-        event = str(candidate.get("event", "evento"))
-        side = str(candidate.get("side", ""))
-        pending_text = f" · pendiente: {event} {side} ({candidate.get('filters', '?')}/3 filtros)"
-        if candidate.get("invalidated"):
-            pending_text += " · pendiente de resolución al cierre"
-
-    return (
-        f"{interval.upper()}: <b>Línea amarilla {volume_position}</b> · "
-        f"Filtros ({filter_direction}): {c['n_ok']}/3 · {filters}{pending_text}"
-    )
+    position = _koncorde_posicion_volumen(row)
+    event_text = ("dentro del área de volumen" if position == "dentro del área de volumen"
+                  else f"fuera del área de volumen {position.replace('fuera por ', 'por ')}")
+    ts_text = "alcista" if bool(row.get("tsa_bullish")) else "bajista"
+    return f"{interval.upper()}: <b>{event_text}</b> · TS {ts_text}"
 
 
 
@@ -1474,7 +1451,7 @@ def _send_daily_summary(state: dict, now_ms: int, market: dict, current_price: f
         else:
             lines.append(_bitman_resumen(interval, item, state))
 
-    lines.extend(["", "<b>KONCORDE · POSICIÓN EN EL ÁREA DE VOLUMEN Y FILTROS</b>"])
+    lines.extend(["", "<b>KONCORDE · EVENTO Y TS</b>"])
     for interval in KONCORDE_INTERVALS:
         item = market.get(interval)
         if item is None:
