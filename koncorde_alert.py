@@ -820,11 +820,11 @@ def _resolve_pending(system: str, interval: str, row, state: dict,
                         if adx_value is not None and di_plus is not None and di_minus is not None
                         else "ADX/DI: no disponible")
             audit = _koncorde_audit_indicators(row)
-            block = (f"<b>KONCORDE {SYMBOL} {interval.upper()}</b>\\n"
-                     f"<b>{outcome_line}</b>\\n"
-                     f"Media amarilla: {audit['media']:.2f} · Marrón: {audit['marron']:.2f}\\n"
-                     f"Posición al cierre: {audit['media_volume_position']}\\n"
-                     f"Volatilidad: {volatility}\\nTS: {ts_text}\\n{adx_text}")
+            block = (f"<b>KONCORDE {SYMBOL} {interval.upper()}</b>\n"
+                     f"<b>{outcome_line}</b>\n"
+                     f"Media amarilla: {audit['media']:.2f} · Marrón: {audit['marron']:.2f}\n"
+                     f"Posición al cierre: {audit['media_volume_position']}\n"
+                     f"Volatilidad: {volatility}\nTS: {ts_text}\n{adx_text}")
         else:
             block = (
                 f"<b>{system.upper()} {SYMBOL} {interval.upper()}</b>\n"
@@ -1033,6 +1033,37 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         )
         return
 
+    # Una vela solo puede generar una candidatura de evento. La posición viva
+    # puede oscilar alrededor del límite (especialmente si marrón se mueve) en
+    # los ciclos de 5 minutos. Si la primera transición se revierte, se invalida
+    # esa candidatura y no se permite una segunda entrada/salida en la misma
+    # vela. Así evitamos avisos repetidos por el mismo vaivén intravela.
+    pending = state.get(key)
+    pending_candidate = (
+        pending.get("candidate")
+        if pending and pending.get("candle") == candle else None
+    )
+    if pending_candidate:
+        if current_position != pending_candidate.get("signal") and not pending_candidate.get("invalidated"):
+            pending_candidate["invalidated"] = True
+            _record_event(
+                state, system="koncorde", interval=interval,
+                kind="candidate_invalidated",
+                signal=f"reversion_{current_position}",
+                price=float(row["close"]), event_time_ms=_utc_now_ms(),
+                status="invalidated",
+                indicators={
+                    "previous_event_id": pending_candidate.get("event_id"),
+                    "candidate_position": pending_candidate.get("signal"),
+                    "current_position": current_position,
+                    "reason": "La posición intravela volvió al estado contrario antes del cierre.",
+                },
+                telegram_sent=False,
+            )
+        state[pos_key] = current_position
+        state[sign_key] = current_sign
+        return
+
     # Solo hay evento al cambiar entre dentro y fuera. Cambiar de fuera-arriba
     # a fuera-abajo sin pasar por dentro no genera entrada/salida.
     was_inside = previous_position == "dentro"
@@ -1079,24 +1110,6 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         telegram_sent=False,
     )
 
-    pending = state.get(key)
-    old_candidate = pending.get("candidate") if pending and pending.get("candle") == candle else None
-
-    if old_candidate and old_candidate.get("signal") != current_position:
-        old_candidate["invalidated"] = True
-        _record_event(
-            state, system="koncorde", interval=interval,
-            kind="candidate_invalidated", signal=event_type,
-            price=float(row["close"]), event_time_ms=event_ms,
-            status="invalidated",
-            indicators={
-                "previous_event_id": old_candidate.get("event_id"),
-                "new_event": event_type,
-                "replaced_by_event": event_type,
-            },
-            telegram_sent=False,
-        )
-
     audit = _koncorde_audit_indicators(row)
     indicators = {
         "Evento": event_label,
@@ -1112,18 +1125,6 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         event_label, row, indicators, state,
         f"intrabar_{event_type}", "provisional", event_ms,
     )
-    if old_candidate:
-        _record_event(
-            state, system="koncorde", interval=interval,
-            kind="candidate_superseded", signal=event_label,
-            price=float(row["close"]), event_time_ms=event_ms,
-            status="superseded",
-            indicators={
-                "previous_event_id": old_candidate.get("event_id"),
-                "new_event_id": new_eid,
-            },
-            telegram_sent=False,
-        )
     state[key] = {
         "candle": candle,
         "candidate": {
