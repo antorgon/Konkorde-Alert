@@ -289,3 +289,26 @@ La entrada o salida del área de volumen se determina exclusivamente con la **l�
 - El cálculo se aplica tanto a los eventos provisionales como a la resolución de la vela cerrada.
 - Se mantienen los tres filtros (valor verde, TSA y ADX/DI), sus fórmulas y umbrales, y la protección ante cambios de signo de la línea marrón.
 - Se reutilizan las claves persistentes `koncorde_live_volume_position_*` y `koncorde_live_marron_sign_*`; no es necesario reiniciar ni modificar `state.json` o `signals_history.jsonl`.
+
+---
+
+## Revisión de cálculos respecto al Pine Script «INDICADORES DE BITMAN»
+
+Esta versión adapta los cálculos Python a las fórmulas del Pine Script adjunto:
+
+- **Koncorde:** OHLC4, PVI/NVI, EMA(15), ventanas 90, MFI de flujo personalizado del Pine (ratio positivo/negativo, no MFI normalizado), RSI Wilder(14), Bollinger SMA(25) con desviación poblacional ×2, estocástico (21,3) y EMA(15) de marrón.
+- **ADX/DMI:** DI Length 14 y ADX Smoothing 14 con RMA de Wilder; se elimina la EMA(3) adicional que tenía Python.
+- **ML RSI:** se fijan los parámetros definitivos de la fotografía: fuente `low`, RSI(27), suavizado SMA(4), 3000 datos y 1000 pasos máximos de clustering. Sigma ALMA no interviene porque la media elegida es SMA. En el Pine, `Performance Memory`, `Threshold Range Min/Max` y `Step` se declaran pero no intervienen en el cálculo de umbrales mostrado.
+- **BBWP:** fuente close, SMA(13), desviación poblacional y comparación con las 252 barras anteriores, sin incluir la barra actual en el conjunto comparado.
+- **AO:** SMA(HL2,5) − SMA(HL2,34), escalado por el rango de 50 barras; el color/estado sigue el signo del cambio del AO escalado, como en Pine.
+- **TS/TSA:** se conserva el Trend Speed Analyzer existente porque no forma parte del Pine 5-en-1 facilitado y se utiliza en los filtros y mensajes de Koncorde.
+
+**Nota sobre ML RSI:** el Pine adjunto inicializa los arrays de distancias y centroides con tres ceros y después añade otros valores, lo que puede romper la asignación de clusters. Python implementa el K-means 1D de tres grupos que el código parece pretender (semillas P25/P50/P75), en vez de reproducir ese defecto de arrays.
+
+## Formato de mensajes Koncorde
+
+- Alertas provisionales y de resolución: únicamente evento, volatilidad BBWP y TS.
+- Resumen diario: únicamente posición/evento de la línea amarilla respecto al área de volumen y TS.
+- Se mantienen los filtros internos existentes para decidir si se emite una alerta; no se muestran en el mensaje.
+
+No se modifican `state.json` ni `signals_history.jsonl`. La validación realizada es sintáctica y con datos sintéticos; no equivale a una prueba live contra Binance o Telegram.
