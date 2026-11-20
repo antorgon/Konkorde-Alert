@@ -89,14 +89,6 @@ def get_klines(symbol=SYMBOL, interval="1h", limit=LOOKBACK) -> pd.DataFrame:
 
 
 # --------------------------- CALCULO KONCORDE ---------------------------
-def _rsi(series: pd.Series, length: int = 14) -> pd.Series:
-    delta = series.diff()
-    gain = delta.clip(lower=0).rolling(length).mean()
-    loss = (-delta.clip(upper=0)).rolling(length).mean()
-    rs = gain / loss.replace(0, 1e-12)
-    return 100 - (100 / (1 + rs))
-
-
 def _rma(series: pd.Series, length: int) -> pd.Series:
     """ta.rma de Pine: semilla SMA(length) y recurrencia Wilder."""
     x = series.astype(float)
@@ -178,7 +170,6 @@ def compute_koncorde(df: pd.DataFrame, m: int = 15, copy: bool = True) -> pd.Dat
     if copy:
         df = df.copy()
     tprice = (df["open"] + df["high"] + df["low"] + df["close"]) / 4.0
-    hlc3 = (df["high"] + df["low"] + df["close"]) / 3.0
     df = _pvi_nvi(df)
 
     pvim = df["pvi"].ewm(span=m, adjust=False, min_periods=1).mean()
@@ -278,7 +269,7 @@ def compute_adx(df: pd.DataFrame, di_length: int = ADX_DI_LENGTH,
     if copy:
         df = df.copy()
     high, low, close = df["high"], df["low"], df["close"]
-    prev_high, prev_low, prev_close = high.shift(1), low.shift(1), close.shift(1)
+    prev_close = close.shift(1)
     up, down = high.diff(), -low.diff()
     plus_dm = pd.Series(np.where(up.isna(), np.nan,
                          np.where((up > down) & (up > 0), up, 0.0)), index=df.index)
@@ -290,7 +281,6 @@ def compute_adx(df: pd.DataFrame, di_length: int = ADX_DI_LENGTH,
     plus = (100.0 * _rma(plus_dm, di_length) / trur).replace([np.inf, -np.inf], np.nan).ffill()
     minus = (100.0 * _rma(minus_dm, di_length) / trur).replace([np.inf, -np.inf], np.nan).ffill()
     total = plus + minus
-    dx = 100.0 * (plus - minus).abs() / total.where(total != 0, 1.0)
     adx = 100.0 * _rma((plus - minus).abs() / total.where(total != 0, 1.0), adx_smoothing)
     df["di_plus"] = plus
     df["di_minus"] = minus
@@ -775,6 +765,28 @@ def _send_transition(system: str, interval: str, label: str, old: str,
     return eid
 
 
+def _adx_interpretacion(adx_value, di_plus, di_minus) -> str:
+    """Traduce ADX/DI a fuerza de tendencia y sesgo direccional."""
+    adx = _safe_float(adx_value)
+    plus = _safe_float(di_plus)
+    minus = _safe_float(di_minus)
+    if adx is None or plus is None or minus is None:
+        return "Tendencia: datos ADX/DI no disponibles"
+    if adx >= 25:
+        fuerza = "fuerte"
+    elif adx >= 20:
+        fuerza = "moderada"
+    else:
+        fuerza = "débil"
+    if plus > minus:
+        sesgo = "alcista"
+    elif minus > plus:
+        sesgo = "bajista"
+    else:
+        sesgo = "neutral"
+    return f"Fuerza de tendencia: {fuerza} · sesgo {sesgo}"
+
+
 def _resolve_pending(system: str, interval: str, row, state: dict,
                      final_signal: str, valid: bool = True):
     """Resuelve una única candidatura pendiente cuando cierra su vela."""
@@ -813,17 +825,11 @@ def _resolve_pending(system: str, interval: str, row, state: dict,
         if system == "koncorde":
             volatility = _volatilidad_resumen(row.get("bbwp"))
             ts_text = "alcista" if bool(row.get("tsa_bullish")) else "bajista"
-            adx_value = _safe_float(row.get("adx"))
-            di_plus = _safe_float(row.get("di_plus"))
-            di_minus = _safe_float(row.get("di_minus"))
-            adx_text = (f"ADX: {adx_value:.1f} · DI+: {di_plus:.1f} · DI-: {di_minus:.1f}"
-                        if adx_value is not None and di_plus is not None and di_minus is not None
-                        else "ADX/DI: no disponible")
-            audit = _koncorde_audit_indicators(row)
+            adx_text = _adx_interpretacion(
+                row.get("adx"), row.get("di_plus"), row.get("di_minus")
+            )
             block = (f"<b>KONCORDE {SYMBOL} {interval.upper()}</b>\n"
                      f"<b>{outcome_line}</b>\n"
-                     f"Media amarilla: {audit['media']:.2f} · Marrón: {audit['marron']:.2f}\n"
-                     f"Posición al cierre: {audit['media_volume_position']}\n"
                      f"Volatilidad: {volatility}\nTS: {ts_text}\n{adx_text}")
         else:
             block = (
@@ -1090,9 +1096,9 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
     di_plus = _safe_float(row.get("di_plus"))
     di_minus = _safe_float(row.get("di_minus"))
     ts_text = "alcista" if tsa_bullish else "bajista"
-    adx_text = (f"ADX: {adx_value:.1f} · DI+: {di_plus:.1f} · DI-: {di_minus:.1f}"
-                if adx_value is not None and di_plus is not None and di_minus is not None
-                else "ADX/DI: no disponible")
+    adx_text = _adx_interpretacion(
+        row.get("adx"), row.get("di_plus"), row.get("di_minus")
+    )
 
     _record_event(
         state, system="koncorde", interval=interval, kind=f"intrabar_{event_type}",
@@ -1110,15 +1116,10 @@ def _process_koncorde(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFr
         telegram_sent=False,
     )
 
-    audit = _koncorde_audit_indicators(row)
     indicators = {
-        "Evento": event_label,
-        "Media amarilla": audit["media"],
-        "Línea marrón": audit["marron"],
-        "Posición de media": audit["media_volume_position"],
         "Volatilidad": _volatilidad_resumen(row.get("bbwp")),
         "TS": ts_text,
-        "ADX/DI": adx_text,
+        "Tendencia": adx_text,
     }
     new_eid = _send_transition(
         "koncorde", interval, "KONCORDE", previous_position,
@@ -1181,7 +1182,6 @@ def _process_ml_rsi(interval: str, df_live: pd.DataFrame, df_closed: pd.DataFram
     if previous != signal:
         event_ms = _utc_now_ms()
         if signal in ("verde", "rojo"):
-            icon = "🟢" if signal == "verde" else "🔴"
             indicators = {
                 "RSI(27, mínimo, SMA4)": _safe_float(row.get("ml_rsi")),
             }
