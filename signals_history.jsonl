@@ -6165,3 +6165,4 @@
 {"record_type":"signal","event_id":"c8a7483c6f09f66c79e12bb8","symbol":"BTCUSDT","system":"ml_rsi","interval":"1h","kind":"closed_bar_classification","signal":"None","status":"closed","event_time_ms":1795330799999,"event_time_utc":"2026-11-22T06:59:59.999000+00:00","detected_time_ms":1795331039302,"sent_time_ms":null,"candle_time_ms":null,"price":59160.01,"telegram_sent":false,"indicators":{"close":59160.01,"ml_rsi":45.83173815376807,"ml_long_s":null,"ml_short_s":null,"ml_señal":null}}
 {"record_type":"daily_status_snapshot_sent","event_time_ms":1795331035410,"day":"2026-11-22","snapshot":{"market_intervals":["1d","1h","1w","4h"],"price":59109.79}}
 {"record_type":"bot_cycle","event_time_ms":1795331341513}
+{"record_type":"bot_cycle","event_time_ms":1795331646918}
