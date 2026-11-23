@@ -2701,7 +2701,10 @@
     "b191c7568b53d4e63163c809",
     "65962076ca4660a5396e541f",
     "724a35942b4103c5b50313e6",
-    "2e505642e1268f6329e38a5f"
+    "2e505642e1268f6329e38a5f",
+    "330a474c73120eae42d5cd98",
+    "cde0c726191f35f89a74b432",
+    "ab665ccb2bd45ac3b28e835c"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2930,7 +2933,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795428272898,
+  "last_cycle_ms": 1795428577741,
   "bitman_last_closed_1h": "1795427999999",
   "bitman_live_signal_1h": "COMPRAR",
   "bitman_live_candle_1h": "1795431599999",
@@ -2950,16 +2953,16 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-23",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795428272898,
-  "last_data_ok_4h": 1795428272898,
-  "last_data_ok_1d": 1795428272898,
-  "last_data_ok_1w": 1795428272898,
+  "last_data_ok_1h": 1795428577741,
+  "last_data_ok_4h": 1795428577741,
+  "last_data_ok_1d": 1795428577741,
+  "last_data_ok_1w": 1795428577741,
   "bitman_last_closed_1w": "1795391999999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795996799999",
   "koncorde_last_closed_1w": "1795391999999",
   "koncorde_live_position_1w": "baja",
-  "koncorde_live_volume_position_1h": "dentro",
+  "koncorde_live_volume_position_1h": "fuera_arriba",
   "koncorde_live_marron_sign_1h": 1,
   "koncorde_live_volume_position_4h": "dentro",
   "koncorde_live_marron_sign_4h": 1,
@@ -2974,5 +2977,16 @@
   "koncorde_live_green_volume_position_1d": "fuera_abajo",
   "koncorde_live_green_marron_sign_1d": -1,
   "koncorde_live_green_volume_position_1w": "dentro",
-  "koncorde_live_green_marron_sign_1w": 1
+  "koncorde_live_green_marron_sign_1w": 1,
+  "pending_koncorde_1h": {
+    "candle": "1795431599999",
+    "candidate": {
+      "signal": "fuera_arriba",
+      "event": "salida",
+      "side": "por arriba",
+      "direction": "alza",
+      "event_id": "cde0c726191f35f89a74b432",
+      "detected_ms": 1795428580066
+    }
+  }
 }
