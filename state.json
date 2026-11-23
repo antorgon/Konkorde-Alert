@@ -2642,7 +2642,12 @@
     "5ac9bccaad4fbddb32479ec9",
     "830b25cd2637f36e0c979f4c",
     "c52631b67f9f9cfcb6b5e6f1",
-    "33264851d9076cce7cad793f"
+    "33264851d9076cce7cad793f",
+    "fe3e2ad50bd3893cf3301c51",
+    "65e63debead1b2ca70d6fed5",
+    "2dbe137e182f0e559a1587c1",
+    "b5578aeaea04ff0cb570b795",
+    "fd61110ed42ba601766083ea"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -2871,9 +2876,9 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795403877205,
+  "last_cycle_ms": 1795404181284,
   "bitman_last_closed_1h": "1795402799999",
-  "bitman_live_signal_1h": "ESPERAR",
+  "bitman_live_signal_1h": "COMPRAR",
   "bitman_live_candle_1h": "1795406399999",
   "bitman_last_closed_4h": "1795391999999",
   "bitman_live_signal_4h": "ESPERAR",
@@ -2891,16 +2896,16 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-22",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795403877205,
-  "last_data_ok_4h": 1795403877205,
-  "last_data_ok_1d": 1795403877205,
-  "last_data_ok_1w": 1795403877205,
+  "last_data_ok_1h": 1795404181284,
+  "last_data_ok_4h": 1795404181284,
+  "last_data_ok_1d": 1795404181284,
+  "last_data_ok_1w": 1795404181284,
   "bitman_last_closed_1w": "1795391999999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795996799999",
   "koncorde_last_closed_1w": "1795391999999",
   "koncorde_live_position_1w": "baja",
-  "koncorde_live_volume_position_1h": "fuera_arriba",
+  "koncorde_live_volume_position_1h": "dentro",
   "koncorde_live_marron_sign_1h": 1,
   "koncorde_live_volume_position_4h": "dentro",
   "koncorde_live_marron_sign_4h": 1,
@@ -2915,5 +2920,25 @@
   "koncorde_live_green_volume_position_1d": "fuera_abajo",
   "koncorde_live_green_marron_sign_1d": -1,
   "koncorde_live_green_volume_position_1w": "dentro",
-  "koncorde_live_green_marron_sign_1w": 1
+  "koncorde_live_green_marron_sign_1w": 1,
+  "pending_bitman_1h": {
+    "candle": "1795406399999",
+    "candidate": {
+      "signal": "COMPRAR",
+      "event_id": "fe3e2ad50bd3893cf3301c51",
+      "detected_ms": 1795404184232
+    },
+    "final_filter_count": 3
+  },
+  "pending_koncorde_1h": {
+    "candle": "1795406399999",
+    "candidate": {
+      "signal": "dentro",
+      "event": "entrada",
+      "side": "desde arriba",
+      "direction": "baja",
+      "event_id": "b5578aeaea04ff0cb570b795",
+      "detected_ms": 1795404184233
+    }
+  }
 }
