@@ -2829,7 +2829,9 @@
     "2723f60dd8f350bc5a30556b",
     "31d1cbbf394d210fffd842f8",
     "b02b5202e250c469a9659daa",
-    "2257a5e98a1d86a7e6672a21"
+    "2257a5e98a1d86a7e6672a21",
+    "87fe85536772d085e32507a1",
+    "f3bb8fd19d44b7472efb31a1"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -3058,9 +3060,9 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795518566142,
+  "last_cycle_ms": 1795518871604,
   "bitman_last_closed_1h": "1795517999999",
-  "bitman_live_signal_1h": "ESPERAR",
+  "bitman_live_signal_1h": "VENDER",
   "bitman_live_candle_1h": "1795521599999",
   "bitman_last_closed_4h": "1795507199999",
   "bitman_live_signal_4h": "ESPERAR",
@@ -3078,17 +3080,17 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-24",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795518566142,
-  "last_data_ok_4h": 1795518566142,
-  "last_data_ok_1d": 1795518566142,
-  "last_data_ok_1w": 1795518566142,
+  "last_data_ok_1h": 1795518871604,
+  "last_data_ok_4h": 1795518871604,
+  "last_data_ok_1d": 1795518871604,
+  "last_data_ok_1w": 1795518871604,
   "bitman_last_closed_1w": "1795391999999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795996799999",
   "koncorde_last_closed_1w": "1795391999999",
   "koncorde_live_position_1w": "baja",
   "koncorde_live_volume_position_1h": "fuera_arriba",
-  "koncorde_live_marron_sign_1h": 1,
+  "koncorde_live_marron_sign_1h": -1,
   "koncorde_live_volume_position_4h": "fuera_arriba",
   "koncorde_live_marron_sign_4h": 1,
   "koncorde_live_volume_position_1d": "fuera_abajo",
@@ -3102,5 +3104,14 @@
   "koncorde_live_green_volume_position_1d": "fuera_abajo",
   "koncorde_live_green_marron_sign_1d": -1,
   "koncorde_live_green_volume_position_1w": "dentro",
-  "koncorde_live_green_marron_sign_1w": 1
+  "koncorde_live_green_marron_sign_1w": 1,
+  "pending_bitman_1h": {
+    "candle": "1795521599999",
+    "candidate": {
+      "signal": "VENDER",
+      "event_id": "87fe85536772d085e32507a1",
+      "detected_ms": 1795518875012
+    },
+    "final_filter_count": 3
+  }
 }
