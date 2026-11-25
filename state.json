@@ -2980,7 +2980,11 @@
     "611d62082c98a62725d1cc10",
     "926f2c5d2741e987ebff07ea",
     "f41913a59aa3e9b93c7258c5",
-    "a10dabc70364aec852bc45e6"
+    "a10dabc70364aec852bc45e6",
+    "9e6b67b86cd694f45bd3fba6",
+    "84c55b326e1bb4a2e012d41e",
+    "58197acf9f10b5ccc1cd124b",
+    "872f16402a6b71b85ae5500c"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -3209,9 +3213,9 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795590104518,
+  "last_cycle_ms": 1795590410065,
   "bitman_last_closed_1h": "1795589999999",
-  "bitman_live_signal_1h": "COMPRAR",
+  "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1795593599999",
   "bitman_last_closed_4h": "1795579199999",
   "bitman_live_signal_4h": "ESPERAR",
@@ -3229,16 +3233,16 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-25",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795590104518,
-  "last_data_ok_4h": 1795590104518,
-  "last_data_ok_1d": 1795590104518,
-  "last_data_ok_1w": 1795590104518,
+  "last_data_ok_1h": 1795590410065,
+  "last_data_ok_4h": 1795590410065,
+  "last_data_ok_1d": 1795590410065,
+  "last_data_ok_1w": 1795590410065,
   "bitman_last_closed_1w": "1795391999999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795996799999",
   "koncorde_last_closed_1w": "1795391999999",
   "koncorde_live_position_1w": "baja",
-  "koncorde_live_volume_position_1h": "fuera_arriba",
+  "koncorde_live_volume_position_1h": "dentro",
   "koncorde_live_marron_sign_1h": 1,
   "koncorde_live_volume_position_4h": "fuera_arriba",
   "koncorde_live_marron_sign_4h": 1,
@@ -3256,11 +3260,18 @@
   "koncorde_live_green_marron_sign_1w": 1,
   "pending_bitman_1h": {
     "candle": "1795593599999",
-    "candidate": {
-      "signal": "COMPRAR",
-      "event_id": "611d62082c98a62725d1cc10",
-      "detected_ms": 1795590107349
-    },
+    "candidate": null,
     "final_filter_count": 3
+  },
+  "pending_koncorde_1h": {
+    "candle": "1795593599999",
+    "candidate": {
+      "signal": "dentro",
+      "event": "entrada",
+      "side": "desde arriba",
+      "direction": "baja",
+      "event_id": "58197acf9f10b5ccc1cd124b",
+      "detected_ms": 1795590412889
+    }
   }
 }
