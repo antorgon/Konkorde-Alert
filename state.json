@@ -3219,7 +3219,10 @@
     "7be30a9b55f07a1aadbdffab",
     "5a288973f3e9e174ce1f9fb3",
     "e56d1bcab56dab74b97b79df",
-    "febf31a87b96c13f44c02ad4"
+    "febf31a87b96c13f44c02ad4",
+    "a2b0ce19e6f51136fd9783db",
+    "76ae4d69eb4d8b07a1a33e51",
+    "861e95c3c3a61baee67477be"
   ],
   "ml_rsi_live_signal_1d": "gris",
   "ml_rsi_last_closed_candle_1d": "1793836799999",
@@ -3448,7 +3451,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795741455046,
+  "last_cycle_ms": 1795741759388,
   "bitman_last_closed_1h": "1795741199999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1795744799999",
@@ -3468,16 +3471,16 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-26",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795741455046,
-  "last_data_ok_4h": 1795741455046,
-  "last_data_ok_1d": 1795741455046,
-  "last_data_ok_1w": 1795741455046,
+  "last_data_ok_1h": 1795741759388,
+  "last_data_ok_4h": 1795741759388,
+  "last_data_ok_1d": 1795741759388,
+  "last_data_ok_1w": 1795741759388,
   "bitman_last_closed_1w": "1795391999999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795996799999",
   "koncorde_last_closed_1w": "1795391999999",
   "koncorde_live_position_1w": "baja",
-  "koncorde_live_volume_position_1h": "fuera_arriba",
+  "koncorde_live_volume_position_1h": "dentro",
   "koncorde_live_marron_sign_1h": 1,
   "koncorde_live_volume_position_4h": "dentro",
   "koncorde_live_marron_sign_4h": 1,
@@ -3492,5 +3495,16 @@
   "koncorde_live_green_volume_position_1d": "fuera_abajo",
   "koncorde_live_green_marron_sign_1d": -1,
   "koncorde_live_green_volume_position_1w": "dentro",
-  "koncorde_live_green_marron_sign_1w": 1
+  "koncorde_live_green_marron_sign_1w": 1,
+  "pending_koncorde_1h": {
+    "candle": "1795744799999",
+    "candidate": {
+      "signal": "dentro",
+      "event": "entrada",
+      "side": "desde arriba",
+      "direction": "baja",
+      "event_id": "76ae4d69eb4d8b07a1a33e51",
+      "detected_ms": 1795741762312
+    }
+  }
 }
