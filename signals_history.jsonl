@@ -8490,3 +8490,4 @@
 {"record_type":"signal","event_id":"bd7bef85498687c47d6fc47a","symbol":"BTCUSDT","system":"bitman","interval":"1h","kind":"telegram_sent","signal":"VENDER:ce2c1dabd93acd9b26e44449","status":"provisional","event_time_ms":1795801243671,"event_time_utc":"2026-11-27T17:40:43.671000+00:00","detected_time_ms":1795801244090,"sent_time_ms":1795801244090,"candle_time_ms":null,"price":59581.97,"telegram_sent":true,"indicators":{"source_event_id":"ce2c1dabd93acd9b26e44449"}}
 {"record_type":"bot_cycle","event_time_ms":1795801545664}
 {"record_type":"bot_cycle","event_time_ms":1795801850258}
+{"record_type":"bot_cycle","event_time_ms":1795802154707}
