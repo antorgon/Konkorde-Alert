@@ -3594,7 +3594,7 @@
       "telegram_sent_at_ms": 1794225659367
     }
   },
-  "last_cycle_ms": 1795834206664,
+  "last_cycle_ms": 1795834511830,
   "bitman_last_closed_1h": "1795831199999",
   "bitman_live_signal_1h": "ESPERAR",
   "bitman_live_candle_1h": "1795834799999",
@@ -3614,10 +3614,10 @@
   "koncorde_live_position_15m": "baja",
   "daily_summary_sent": "2026-11-27",
   "last_data_ok_15m": 1794389137831,
-  "last_data_ok_1h": 1795834206664,
-  "last_data_ok_4h": 1795834206664,
-  "last_data_ok_1d": 1795834206664,
-  "last_data_ok_1w": 1795834206664,
+  "last_data_ok_1h": 1795834511830,
+  "last_data_ok_4h": 1795834511830,
+  "last_data_ok_1d": 1795834511830,
+  "last_data_ok_1w": 1795834511830,
   "bitman_last_closed_1w": "1795391999999",
   "bitman_live_signal_1w": "ESPERAR",
   "bitman_live_candle_1w": "1795996799999",
