@@ -8750,3 +8750,4 @@
 {"record_type":"signal","event_id":"c1257d508a4202259236ade4","symbol":"BTCUSDT","system":"koncorde","interval":"1h","kind":"candidate_invalidated","signal":"reversion_fuera_arriba","status":"invalidated","event_time_ms":1795853726400,"event_time_utc":"2026-11-28T08:15:26.400000+00:00","detected_time_ms":1795853726400,"sent_time_ms":null,"candle_time_ms":null,"price":59672.9,"telegram_sent":false,"indicators":{"previous_event_id":"9f3ac0105984182871395ecd","candidate_position":"dentro","current_position":"fuera_arriba","reason":"La posición intravela volvió al estado contrario antes del cierre."}}
 {"record_type":"bot_cycle","event_time_ms":1795854028526}
 {"record_type":"bot_cycle","event_time_ms":1795854332807}
+{"record_type":"bot_cycle","event_time_ms":1795854637121}
